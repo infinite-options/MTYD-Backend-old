@@ -343,7 +343,28 @@ def LogLoginAttempt(data, conn):
     except:
         print("Could not log login attempt.")
         return None
+class AccountSalt(Resource):
+    def get(self, accEmail):
+        response = {}
+        try:
+            conn = connect()
 
+            items = execute(""" SELECT password_hashed, password_salt 
+                                    FROM customers cus
+                                    WHERE customer_email = \'""" + accEmail + """\';""", 'get', conn)
+            if items['code'] != 280:
+                response['message'] = "Internal Server Error."
+                return response, 500
+            if not items['result']:
+                response['message'] = "User's password not found."
+                return response, 404
+            response['message'] = 'Request successful.'
+            response['result'] = items['result']
+            return response, 200
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
 
 class Login(Resource):
 
@@ -702,26 +723,29 @@ class Plans(Resource):
         items = {}
         try:
             conn = connect()
-            queries = """SELECT * FROM ms.subscription_items subi
+            queries = """SELECT * FROM subscription_items subi
                             WHERE payment_frequency = "4 Week Pre-Pay"
                             GROUP BY item_name
                             ORDER BY num_items ASC;"""
 
-            items['Plans'] = execute(queries[1], 'get', conn)
-            if items['Plans']['code'] != 280:
-                response['message'] = "Internal Server Error."
-                return response, 500
-            all_plan = execute("""SELECT * FROM ms.subscription_items subi;""", 'get', conn)
-            if items['Plans']['code'] != 280:
-                response['message'] = "Internal Server Error."
-                return response, 500
-            all_plan = all_plan['result']
-            print(all_plan)
-            items['FiveMealPaymentPlans'] = execute(queries[1], 'get', conn)
-            items['TenMealPaymentPlans'] = execute(queries[2], 'get', conn)
-            items['FifteenMealPaymentPlans'] = execute(queries[3], 'get', conn)
-            items['TwentyMealPaymentPlans'] = execute(queries[4], 'get', conn)
+            items['MealPlans'] = execute(queries, 'get', conn)
 
+            if items['MealPlans']['code'] != 280:
+                response['message'] = "Internal Server Error."
+                return response, 500
+            items['MealPlans'] =  items['MealPlans']['result']
+            all_plans = execute("""SELECT * FROM subscription_items subi;""", 'get', conn)
+            if all_plans['code'] != 280:
+                response['message'] = "Internal Server Error."
+                return response, 500
+            all_plans = all_plans['result']
+
+            for plan in all_plans:
+                if plan['item_name'] is not None:
+                    if items.get(plan['item_name']) is None:
+                        items[plan['item_name']] = [plan]
+                    else:
+                        items[plan['item_name']] += [plan]
             response['message'] = 'Request successful.'
             response['result'] = items
 
@@ -2154,6 +2178,7 @@ class SavePurchaseNote(Resource):
 api.add_resource(Meals, '/api/v2/meals', '/api/v2/meals/<string:startDate>')
 api.add_resource(Plans, '/api/v2/plans')
 api.add_resource(SignUp, '/api/v2/signup')
+api.add_resource(AccountSalt, '/api/v2/accountsalt/<string:accEmail>')
 api.add_resource(AccountPurchases, '/api/v2/accountpurchases/<string:customer_id>')
 api.add_resource(Checkout, '/api/v2/checkout')
 

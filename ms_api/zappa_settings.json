@@ -1,6 +1,6 @@
 {
     "dev": {
-        "app_function": "api.app",
+        "app_function": "ms_api.app",
         "aws_region": "us-west-1",
         "profile_name": "default",
         "project_name": "ms",
