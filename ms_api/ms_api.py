@@ -32,7 +32,7 @@ stripe.api_key = stripe_secret_key
 RDS_HOST = 'pm-mysqldb.cxjnrciilyjq.us-west-1.rds.amazonaws.com'
 RDS_PORT = 3306
 RDS_USER = 'admin'
-RDS_DB = 'ms'
+RDS_DB = 'sf'
 
 app = Flask(__name__)
 cors = CORS(app, resources={r'/api/*': {'origins': '*'}})
@@ -141,6 +141,39 @@ def execute(sql, cmd, conn, skipSerialization=False):
         # response['sql'] = sql
         return response
 
+def get_new_paymentID(conn):
+    newPaymentQuery = execute("CALL new_payment_uid", 'get', conn)
+    if newPaymentQuery['code'] == 280:
+        return newPaymentQuery['result'][0]['new_id']
+    return "Could not generate new payment ID", 500
+
+
+
+def get_new_purchaseID(conn):
+    newPurchaseQuery = execute("CALL new_purchase_uid", 'get', conn)
+    if newPurchaseQuery['code'] == 280:
+        return newPurchaseQuery['result'][0]['new_id']
+    return "Could not generate new purchase ID", 500
+
+def simple_get_execute(query, name_to_show, conn):
+    response = {}
+    res = execute(query, 'get', conn)
+
+    if res['code'] != 280:
+        string = " Cannot run the query for " + name_to_show + ". "
+        print("*" * (len(string) + 10))
+        print(string.center(len(string) + 10, "*"))
+        print("*" * (len(string) + 10))
+        response['message'] = 'Internal Server Error.'
+        return response, 500
+    elif not res['result']:
+        response['message'] = 'Not Found'
+        return response, 404
+    else:
+        response['message'] = "Get " + name_to_show + " successful."
+        response['result'] = res['result']
+        return response, 200
+
 class SignUp(Resource):
     def post(self):
         response = {}
@@ -150,115 +183,154 @@ class SignUp(Resource):
             should_delete = False
             data = request.get_json(force=True)
 
-            Email = data['email'].lower()
-            FirstName = data['first_name'].lower()
-            LastName = data['last_name'].lower()
-            Address = data['address'].lower()
-            City = data['city'].lower()
-            State = data['state'].lower()
+            email = data['email']
+            firstName = data['first_name']
+            lastName = data['last_name']
+            phone = data['phone_number']
+            address = data['address']
+            unit = "'" + data['unit'] + "'" if data.get('unit') is not None else 'NULL'
+            city = data['city']
+            state = data['state']
             zip_code = data['zip_code']
-            PhoneNumber = data['phone_number']
-            WeeklyUpdates = data['weekly_update'].lower()
-            Referral = data['referral'].lower()
-            Role = data['role']
-            registered_by = 'email' if data.get('registered_by') is None else data.get('registered_by').lower()
-            if (data.get('registered_by') is not None and registered_by != 'email'):
-                AccessToken = data['access_token'].lower()
-                RefreshToken = data['refresh_token'].lower()
+            latitude = data['latitude']
+            longitude = data['longitude']
+
+            referral = data['referral_source']
+            role = data['role']
+            if data.get('social') is None or data.get('social') == "FALSE" or data.get('social') == False:
+                social_signup = False
+            else:
+                social_signup = True
+
 
             # check if there is a same customer_id existing
             query = """
-                    SELECT email FROM customers
-                    WHERE email = \'""" + Email + "\';"
+                    SELECT customer_email FROM customers
+                    WHERE customer_email = \'""" + email + "\';"
 
             emailExists = execute(query, 'get', conn)
-
-            if emailExists['code'] == 280 and len(emailExists['result']) > 0:
-                statusCode = 400
+            if emailExists['code'] != 280:
+                string = " Cannot run the query for " + __class__.__name__ + ". "
+                print("*" * (len(string) + 10))
+                print(string.center(len(string) + 10, "*"))
+                print("*" * (len(string) + 10))
+                response['message'] = 'Internal Server Error.'
+                return response, 500
+            elif emailExists['code'] == 280 and len(emailExists['result']) > 0:
                 response['message'] = 'Email address is already taken.'
-                return response, statusCode
+                return response, 409
 
             get_user_id_query = "CALL get_new_customer_id;"
             NewUserIDresponse = execute(get_user_id_query, 'get', conn)
+
             if NewUserIDresponse['code'] == 490:
-                print("Cannot get new User id")
+                string = " Cannot get new User id. "
+                print("*" * (len(string) + 10))
+                print(string.center(len(string) + 10, "*"))
+                print("*" * (len(string) + 10))
                 response['message'] = "Internal Server Error."
                 return response, 500
             NewUserID = NewUserIDresponse['result'][0]['new_id']
 
-            if registered_by == 'email':
+            if social_signup == False:
                 salt = getNow()
-                hashed = sha512((data['password'] + salt).encode()).hexdigest()
-            # write everything to database
+                password = "'" + sha512((data['password'] + salt).encode()).hexdigest() + "'"
+                algorithm = "'SHA512'"
+                salt = "'" + salt + "'"
+                access_token = 'NULL'
+                refresh_token = 'NULL'
+                user_social_signup = 'NULL'
+            else:
+                access_token = data['access_token']
+                refresh_token = data['refresh_token']
+                salt = 'NULL'
+                password = 'NULL'
+                algorithm = 'NULL'
+                user_social_signup = "'" + data['social'] + "'"
 
-            customer_insert_query = """INSERT INTO customers
-                                (
-                                    customer_id,
-                                    first_name,
-                                    last_name,
-                                    phone_num,
-                                    email,
-                                    address,
-                                    city,
-                                    state,
-                                    zip_code,
-                                    registered_by,
-                                    referral_source,
-                                    role,
-                                    created_at,
-                                    updated_at,
-                                    weekly_updates
-                                )
-                            VALUES
-                            ('""" + NewUserID + """',
-                            '""" + FirstName + """',
-                            '""" + LastName + """',
-                            '""" + PhoneNumber + """',
-                            '""" + Email + """',
-                            '""" + Address + """',
-                            '""" + City + """',
-                            '""" + State + """',
-                            '""" + zip_code + """',
-                            '""" + registered_by + """',
-                            '""" + Referral + """',
-                            '""" + Role + """',
-                            '""" + getToday() + """',
-                            '""" + getToday() + """',
-                            '""" + WeeklyUpdates + """');"""
+            # write everything to database
+            customer_insert_query = """
+                                    INSERT INTO customers 
+                                    (
+                                        customer_id,
+                                        customer_created_at,
+                                        customer_first_name,
+                                        customer_last_name,
+                                        customer_phone_num,
+                                        customer_email,
+                                        customer_address,
+                                        customer_unit,
+                                        customer_city,
+                                        customer_state,
+                                        customer_zip,
+                                        customer_latitude,
+                                        customer_longitude,
+                                        password_salt,
+                                        password_hashed,
+                                        password_algorithm,
+                                        referral_source,
+                                        role,
+                                        user_social_media,
+                                        user_access_token,
+                                        user_refresh_token
+                                    )
+                                    VALUES
+                                    (
+                                        '""" + NewUserID + """',
+                                        '""" + getNow() + """',
+                                        '""" + str(firstName) + """',
+                                        '""" + str(lastName) + """',
+                                        '""" + str(phone) + """',
+                                        '""" + str(email) + """',
+                                        '""" + str(address) + """',
+                                        """ + str(unit) + """,
+                                        '""" + str(city) + """',
+                                        '""" + str(state) + """',
+                                        '""" + str(zip_code) + """',
+                                        '""" + str(latitude) + """',
+                                        '""" + str(longitude) + """',
+                                        """ + str(salt) + """,
+                                        """ + str(password) + """,
+                                        """ + str(algorithm) + """,
+                                        '""" + str(referral) + """',
+                                        '""" + str(role) + """',
+                                        """ + str(user_social_signup) + """,
+                                        """ + str(access_token) + """,
+                                        """ + str(refresh_token) + """
+                                    );
+                                    """
 
             usnInsert = execute(customer_insert_query, 'post', conn)
-            should_delete = True  #this is used for error handle
-            if usnInsert['code'] != 281:
-                statusCode = 500
-                response['message'] = 'Internal server error.'
-                return response, statusCode
-            if registered_by =='email':
-                password_update_query = """
-                    UPDATE customers SET
-                        password_salt = '""" + salt + """',
-                        password_hashed = '""" + hashed + """',
-                        password_algorithm = 'SHA512',
-                        email_verified = '0'
-                    WHERE customer_id = '""" + NewUserID + """';"""
-                password_update = execute(password_update_query, 'post', conn)
-                if password_update['code'] != 281:
-                    execute("""DELETE FROM customers WHERE customer_id = '""" + NewUserID + """';""", 'post', conn)
-                    response['message'] = "Internal Server Error."
-                    return response, 500
-                    # Sending verification email
-                token = s.dumps(Email)
 
-                msg = Message("Email Verification", sender='ptydtesting@gmail.com', recipients=[Email])
-                print(hashed)
-                link = url_for('confirm', token=token, hashed=hashed, _external=True)
+
+            if usnInsert['code'] != 281:
+                string = " Cannot Insert into the customers table. "
+                print("*" * (len(string) + 10))
+                print(string.center(len(string) + 10, "*"))
+                print("*" * (len(string) + 10))
+                response['message'] = "Internal Server Error."
+                return response, 500
+            should_delete = True  # this is used for error handle
+            # Sending verification email
+            if social_signup == False:
+                token = s.dumps(email)
+
+                msg = Message("Email Verification", sender='ptydtesting@gmail.com', recipients=[email])
+
+                link = url_for('confirm', token=token, hashed=password, _external=True)
 
                 msg.body = "Click on the link {} to verify your email address.".format(link)
 
                 mail.send(msg)
-
+            result = {
+                'first_name': firstName,
+                'last_name': lastName,
+                'customer_id': NewUserID,
+                'access_token': access_token,
+                'refresh_token': refresh_token
+            }
             response['message'] = "OK"
-            response['first_name'] = FirstName
-            response['customer_id'] = NewUserID
+            response['result'] = result
 
             return response, 200
         except:
@@ -343,98 +415,97 @@ def LogLoginAttempt(data, conn):
     except:
         print("Could not log login attempt.")
         return None
-class AccountSalt(Resource):
-    def get(self, accEmail):
+
+class Login (Resource):
+    def get(self):
         response = {}
         try:
             conn = connect()
-
-            items = execute(""" SELECT password_hashed, password_salt 
-                                    FROM customers cus
-                                    WHERE customer_email = \'""" + accEmail + """\';""", 'get', conn)
-            if items['code'] != 280:
-                response['message'] = "Internal Server Error."
+            email = request.args['email']
+            password = request.args.get('password')
+            refresh_token = request.args.get('token')
+            query = """
+                    # CUSTOMER QUERY 1: LOGIN
+                    SELECT customer_id,
+                            customer_last_name,
+                            customer_first_name,
+                            customer_email, 	
+                            password_hashed, 	
+                            password_salt,
+                            email_verified, 	
+                            user_social_media,
+                            user_access_token,
+                            user_refresh_token  
+                    FROM sf.customers c 
+                    -- WHERE customer_email = "1m4kfun@gmail.com";
+                    WHERE customer_email = \'""" + email + """\';
+                    """
+            res = execute(query, 'get', conn)
+            if res['code'] != 280:
+                string = " Cannot run the query for " + __class__.__name__ + ". "
+                print("*" * (len(string) + 10))
+                print(string.center(len(string) + 10, "*"))
+                print("*" * (len(string) + 10))
+                response['message'] = 'Internal Server Error.'
                 return response, 500
-            if not items['result']:
-                response['message'] = "User's password not found."
+            elif not res['result']:
+                response['message'] = 'Not Found'
                 return response, 404
-            response['message'] = 'Request successful.'
-            response['result'] = items['result']
-            return response, 200
+            else:
+                if password is not None and res['result'][0]['user_social_media'] == 'TRUE':
+                    response['message'] = "Need to login by Social Media"
+                    return response, 401
+                elif password is None and refresh_token is None:
+                    return BadRequest("Bad request.")
+                # compare passwords if user_social_media is false
+                elif res['result'][0]['user_social_media'] == 'FALSE':
+                    salt = res['result'][0]['password_salt']
+                    hashed = sha512((password + salt).encode()).hexdigest()
+                    if res['result'][0]['password_hashed'] != hashed:
+                        response['message'] = "Wrong password."
+                        return response, 401
+                    if res['result'][0]['email_verified'] == 0 or res['result'][0]['email_verified'] == "FALSE":
+                        response['message'] = "Account need to be verified by email."
+                        return response, 401
+                # compare the refresh token because it never expire.
+                elif res['result'][0]['user_social_media'] == 'TRUE':
+                    if res['result'][0]['user_refresh_token'] != refresh_token:
+                        response['message'] = "Cannot Authenticated."
+                        return response, 401
+                else:
+                    string = " Cannot compare the password or refresh token while log in. "
+                    print("*" * (len(string) + 10))
+                    print(string.center(len(string) + 10, "*"))
+                    print("*" * (len(string) + 10))
+                    response['message'] = 'Internal Server Error.'
+                    return response, 500
+                del res['result'][0]['password_hashed']
+                del res['result'][0]['password_salt']
+
+                response['message'] = "Authenticated success."
+                response['result'] = res['result'][0]
+                return response, 200
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
 
-class Login(Resource):
-
-    def post(self, accEmail, accPass):
-        response = {}
+class AccountSalt(Resource):
+    def get(self):
         try:
             conn = connect()
-            data = request.get_json(force=True)
-            print(data)
-            if data.get('ip_address') == None:
-                response['message'] = 'Request failed, did not receive IP address.'
-                return response, 400
-            if data.get('browser_type') == None:
-                response['message'] = 'Request failed, did not receive browser type.'
-                return response, 400
-
-            queries = [
-                """ SELECT
-                        user_uid,
-                        first_name,
-                        last_name,
-                        user_email,
-                        phone_number,
-                        create_date,
-                        last_update,
-                        referral_source,
-                        email_verify
-                    FROM ptyd_accounts""" +
-                "\nWHERE user_email = " + "\'" + accEmail + "\';"]
-
-            items = execute(queries[0], 'get', conn)
-            user_uid = items['result'][0]['user_uid']
-
-            queries.append(
-                "SELECT * FROM ptyd_passwords WHERE password_user_uid = \'" + user_uid + "\';")
-            password_response = execute(queries[1], 'get', conn)
-            if accPass == password_response['result'][0]['password_hash']:
-                print("Successful authentication.")
-                response['message'] = 'Request successful.'
-                response['result'] = items
-                response['auth_success'] = True
-                httpCode = 200
-            else:
-                print("Wrong password.")
-                response['message'] = 'Request failed, wrong password.'
-                response['auth_success'] = False
-                httpCode = 401
-
-            login_attempt = {
-                'user_uid': user_uid,
-                'attempt_hash': accPass,
-                'ip_address': data['ip_address'],
-                'browser_type': data['browser_type'],
-            }
-
-            if response['auth_success']:
-                login_attempt['auth_success'] = 'TRUE'
-            else:
-                login_attempt['auth_success'] = 'FALSE'
-
-            response['login_attempt_log'] = LogLoginAttempt(
-                login_attempt, conn)
-
-            return response, httpCode
+            email = request.args['email']
+            query = """
+                    SELECT password_hashed, 
+                            password_salt 
+                    FROM customers cus
+                    WHERE customer_email = \'""" + email + """\';
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
-
-
 
 class Meals(Resource):
     global RDS_PW
@@ -495,8 +566,7 @@ class Meals(Resource):
             # Hardcode quantity to 0
             # Will need to fetch from db eventually
             rowDict['quantity'] = 0
-            #           rowDict['meal_photo_url'] = 'https://prep-to-your-door-s3.s3.us-west-1.amazonaws.com/dev_imgs/700-000014.png'
-
+            # rowDict['meal_photo_url'] = 'https://prep-to-your-door-s3.s3.us-west-1.amazonaws.com/dev_imgs/700-000014.png'
             if rowDict['menu_category'] in ['ALMOND_BUTTER', 'THE_ENERGIZER', 'SEASONAL_SMOOTHIE', 'THE_ORIGINAL']:
                 json['Smoothies']['Menu'].append(rowDict)
             elif 'SEAS_FAVE' in rowDict['menu_category']:
@@ -518,11 +588,12 @@ class Meals(Resource):
         return mealQuantities
 
     def getAddonPrice(self, menu):
+
         savedAddonPrice = {}
         for key in ['Meals', 'Addons']:
             for subMenu in menu[key]:
                 for eachMeal in menu[key][subMenu]['Menu']:
-                    related_price = eachMeal['extra_meal_price']
+                    related_price = eachMeal['meal_price']
                     meal_id = eachMeal['meal_id']
                     savedAddonPrice[meal_id] = related_price
         return savedAddonPrice
@@ -548,6 +619,7 @@ class Meals(Resource):
             dates = execute(
                 "SELECT DISTINCT menu_date FROM menu;", 'get', conn)
             i = 1
+
             for date in dates['result']:
                 # only grab 6 weeks worth of menus
                 if i == 7:
@@ -568,7 +640,7 @@ class Meals(Resource):
                             meal_desc,
                             meal_category,
                             meal_photo_url,
-                            extra_meal_price,
+                            meal_price,
                             meal_calories,
                             meal_protein,
                             meal_carbs,
@@ -592,7 +664,7 @@ class Meals(Resource):
                             meal_desc,
                             meal_category,
                             meal_photo_url,
-                            extra_meal_price,
+                            meal_price,
                             meal_calories,
                             meal_protein,
                             meal_carbs,
@@ -616,7 +688,7 @@ class Meals(Resource):
                             meal_desc,
                             meal_category,
                             meal_photo_url,
-                            extra_meal_price,
+                            meal_price,
                             meal_calories,
                             meal_protein,
                             meal_carbs,
@@ -640,7 +712,7 @@ class Meals(Resource):
                             meal_desc,
                             meal_category,
                             meal_photo_url,
-                            extra_meal_price,
+                            meal_price,
                             meal_calories,
                             meal_protein,
                             meal_carbs,
@@ -652,13 +724,20 @@ class Meals(Resource):
                         LEFT JOIN meals ON menu.menu_meal_id = meals.meal_id
                         WHERE menu_category LIKE 'ADD_ON_%'
                         AND menu_date = '""" + date['menu_date'] + "';", 'get', conn)
-
+                    if weekly_special['code'] != 280 or seasonal_special['code'] != 280 or smoothies['code'] != 280 or addon['code'] != 280:
+                        print("*******************************************")
+                        print("* Cannot run the query for Meals endpoint *")
+                        print("*******************************************")
+                        response['message'] = 'Internal Server Error.'
+                        return response, 500
                     thursday = stamp - timedelta(days=2)
 
                     today = datetime.now()
 
                     if today < thursday:
                         # stamp = stamp + timedelta(days=7)
+                        weekly_special['result'] = [] if not weekly_special['result'] else weekly_special['result']
+                        seasonal_special['result'] = [] if not seasonal_special['result'] else seasonal_special['result']
 
                         week = {
                             'SaturdayDate': str(stamp.date()),
@@ -696,7 +775,9 @@ class Meals(Resource):
                         }
 
                         week['MealQuantities'] = self.getMealQuantities(week)
+
                         week['AddonPrice'] = self.getAddonPrice(week)
+
 
                         index = 'MenuForWeek' + str(i)
                         items[index] = week
@@ -713,43 +794,19 @@ class Meals(Resource):
         finally:
             disconnect(conn)
 
-
-
 class Plans(Resource):
-
     # HTTP method GET
     def get(self):
-        response = {}
-        items = {}
         try:
             conn = connect()
-            queries = """SELECT * FROM subscription_items subi
-                            WHERE payment_frequency = "4 Week Pre-Pay"
-                            GROUP BY item_name
-                            ORDER BY num_items ASC;"""
-
-            items['MealPlans'] = execute(queries, 'get', conn)
-
-            if items['MealPlans']['code'] != 280:
-                response['message'] = "Internal Server Error."
-                return response, 500
-            items['MealPlans'] =  items['MealPlans']['result']
-            all_plans = execute("""SELECT * FROM subscription_items subi;""", 'get', conn)
-            if all_plans['code'] != 280:
-                response['message'] = "Internal Server Error."
-                return response, 500
-            all_plans = all_plans['result']
-
-            for plan in all_plans:
-                if plan['item_name'] is not None:
-                    if items.get(plan['item_name']) is None:
-                        items[plan['item_name']] = [plan]
-                    else:
-                        items[plan['item_name']] += [plan]
-            response['message'] = 'Request successful.'
-            response['result'] = items
-
-            return response, 200
+            business_id = request.args['business_id']
+            query = """
+                    # ADMIN QUERY 5: PLANS 
+                    SELECT * FROM sf.subscription_items si 
+                    -- WHERE itm_business_id = "200-000007"; 
+                    WHERE itm_business_id = \'""" + business_id + """\';
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
@@ -757,265 +814,169 @@ class Plans(Resource):
 
 class AccountPurchases(Resource):
     # HTTP method GET
-    def get(self, customer_id):
-        response = {}
-
+    def get(self):
         try:
-            start_date = request.args.get('startdate')
-
-            if start_date is not None:
-                startDate = datetime.strptime(start_date, "%Y%m%d")
-                now = startDate
-            else:
-                now = date.today()
-
+            conn = connect()
+            customer_id = request.args['customer_id']
+            business_id = request.args['business_id']
+            query = """
+                    # QUERY 4: LATEST PURCHASES WITH SUBSCRIPTION INFO AND LATEST PAYMENTS AND CUSTOMERS
+                    # FOR ACCOUNT PURCHASES SECTION
+                    SELECT *
+                    FROM sf.lpsilp
+                    LEFT JOIN sf.customers c
+                        ON lpsilp.pur_customer_id = c.customer_id
+                    WHERE pur_business_id = '""" + business_id + """'
+                        AND pur_customer_id = '""" + customer_id + """';
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
         except:
-            raise BadRequest('Request failed, bad startDate parameter.')
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+class Next_Billing_Date(Resource):
+    def get(self):
+        try:
+            conn = connect()
+            business_id = request.args['business_id']
+            query = """
+                    # QUERY 9: NEXT BILLING DATE  NUMBER OF DELIVERIES  NUMBER OF SKIPS
+                    SELECT 
+                        purchase_id,
+                        start_delivery_date,
+                        num_issues,
+                        payment_day,
+                        item_price,
+                        shipping,
+                    --     menu_date,
+                    -- 	combined_selection
+                        sum(IF (combined_selection != "" OR combined_selection IS NULL,1,0)) AS weeks,
+                        sum(IF (combined_selection != "SKIP" OR combined_selection IS NULL,1,0)) AS delivered,
+                        sum(IF (combined_selection = "SKIP",1,0)) AS skip_amount,
+                        num_issues - sum(if (combined_selection != "SKIP" OR combined_selection IS NULL,1,0)) AS remaining,
+                        ADDDATE(start_delivery_date, payment_day-3) AS BillingDate,
+                        ADDDATE(start_delivery_date, payment_day-3+sum(IF (combined_selection = "SKIP",1,0))*payment_day/num_issues) AS NextBillingDate
+                    FROM (
+                        SELECT *
+                        FROM sf.lpsilp, (SELECT DISTINCT menu_date FROM sf.menu) AS md)
+                        AS lpsilpmd
+                    LEFT JOIN sf.latest_combined_meal lcm
+                        ON lpsilpmd.menu_date = lcm.sel_menu_date AND
+                            lpsilpmd.purchase_id = lcm.sel_purchase_id
+                    WHERE pur_business_id = '""" + business_id + """'
+                        AND menu_date >= start_delivery_date
+                        AND menu_date <= CURDATE()
+                    GROUP BY purchase_id;
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
 
+class Next_Addon_Charge(Resource):
+    def get(self):
+        try:
+            conn = connect()
+            query = """
+                    # STEP 3 COUNT ADDONS AND MULTIPLY BY MENU PRICE TO DETERMINE AMOUNT AND CHARGE DATE
+                    # QUERY 10: ADD-ONS AND NEXT ADD-ON CHARGES
+                    SELECT *,
+                        COUNT(n) as quantity,
+                        COUNT(n) * meal_price AS addon_charge,
+                        ADDDATE(last_sel_menu_date, -3) as addon_charge_date
+                    FROM (
+                        SELECT sel_purchase_id,
+                            last_sel_menu_date,
+                            substring_index(substring_index(addon_selection,';',n),';',-1) AS addon_selected,
+                            n
+                        FROM (
+                            SELECT sel_purchase_id,
+                                MIN(last_menu_date) as last_sel_menu_date,
+                                addon_selection
+                            FROM sf.latest_combined_meal
+                            WHERE SEL_MENU_DATE >= ADDDATE(CURDATE(), 0)  -- remove 28 after testing
+                                AND addon_selection IS NOT NULL
+                                AND addon_selection != ""
+                            GROUP BY sel_purchase_id) 
+                            AS addon
+                    JOIN numbers ON char_length(addon_selection) - char_length(replace(addon_selection, ';', '')) >= n - 1)
+                        AS sub
+                    LEFT JOIN menu
+                        ON addon_selected = menu_meal_id
+                        AND last_sel_menu_date = menu_date
+                    GROUP BY sel_purchase_id,
+                        sub.addon_selected;
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+class SelectedMeals(Resource):
+    def get(self):
+        response = {}
         try:
             conn = connect()
 
-            dayOfWeek = now.weekday()
-            # Get the soonest Saturday, same day if today is Saturday
-            sat = now + timedelta(days=(12 - dayOfWeek) % 7)
-            thur = now + timedelta(days=(10 - dayOfWeek) % 7)
+            business_id = request.args['business_id']
+            customer_id = request.args['customer_id']
 
-            print("sat before: ", sat)
-            print("thur before: ", thur)
+            query = """
+                    # QUERY 5: LATEST PURCHASES WITH SUBSCRIPTION INFO AND LATEST PAYMENTS AND CUSTOMERS AND MEAL SELECTIONS 
+                    # FOR MEAL SELECTION PAGE AND BUTTON COLORS 
+                    SELECT * FROM sf.lpsilp 
+                    LEFT JOIN sf.customers c 	
+                        ON lpsilp.pur_customer_id = c.customer_id 
+                    LEFT JOIN sf.latest_combined_meal AS lcm 	
+                        ON lpsilp.purchase_id = lcm.sel_purchase_id 
+                    WHERE pur_business_id = '""" + business_id + """'
+                        AND pur_customer_id = '""" + customer_id + """';
+                    """
+            query_res = execute(query, 'get', conn)
 
-            # If today is Thursday after 4PM
-            # if sat == now and now.hour >= 16:
-            #     sat += timedelta(days=7)
+            if (query_res['code'] != 280):
+                print("*******************************************")
+                print("* Cannot run the query for selected Meals *")
+                print("*******************************************")
+                response['message'] = 'Internal Server Error.'
+                return response, 500
+            result = {}
+            for purchase in query_res['result']:
+                if purchase['purchase_id'] not in result:
+                    result[purchase['purchase_id']] = {}
 
-            # if thursday is passed, the affected week is the next week
-            # if now + timedelta(days=7) > thur:
-            # #     thur += timedelta(days=7)
-            #     sat += timedelta(days=7)
-            # change sat into string
-            sat = sat.strftime("%Y-%m-%d")
-            thur = thur.strftime("%Y-%m-%d")
-            print("sat after: ", sat)
-            print("thur after: ", thur)
-            queries = ["""
-                SELECT 
-                    pay.payment_id 
-                    ,pur.customer_id
-                    ,pay.coupon_id
-                    ,pay.gift
-                    ,(pay.amount_due + IFNULL(addon.total_charge,0)) AS amount_due
-                    ,pay.amount_paid
-                    ,pur.purchase_id AS purchase_id
-                    ,pay.payment_timestamp AS last_payment_timestamp
-                    -- ,pay.payment_type
-                    ,pay.cc_num
-                    ,pay.cc_expired_date
-                    ,pay.cc_cvv
-                    -- ,pay.billing_zip
-                    ,pur.meal_plan_id
-                    ,plans.MaximumMeals
-                    ,plans.meal_plan_desc
-                    ,plans.meal_plan_price
-                    ,plans.payment_frequency
-                    ,pur.start_date AS delivery_start_date -- should calculate to become saturday
-                    ,pur.delivery_first_name
-                    ,pur.delivery_last_name
-                    ,pur.delivery_email
-                    ,pur.delivery_phone_num
-                    ,pur.delivery_address
-                    -- ,purch.delivery_address_unit
-                    ,pur.delivery_city
-                    ,pur.delivery_state
-                    ,pur.delivery_zip_code
-                    -- ,pur.delivery_region
-                    ,pur.delivery_instructions
-                    ,pur.weeks_remaining AS paid_weeks_remaining
-                    -- ,snap.next_billing_date AS next_charge_date
-                    , "2020-08-06" AS next_charge_date -- determine by program
-                    ,IFNULL(addon.total_charge, 0.00) AS total_charge
-                    ,pay.amount_due AS amount_due_before_addon
-                    ,pur.start_date
-                    ,pur.weeks_remaining
-                 , \'""" + thur + """\' AS next_addon_charge_date
-                FROM (
-                -- purchases query , checks to make sure the account is active 
-                SELECT 
-                    A.purchase_id
-                    ,A.customer_id
-                    ,A.meal_plan_id
-                    ,A.start_date
-                    ,A.delivery_first_name
-                    ,A.delivery_last_name
-                    ,A.delivery_email
-                    ,A.delivery_phone_num
-                    ,A.delivery_address
-                    -- ,A.delivery_address_unit
-                    ,A.delivery_city
-                    ,A.delivery_state
-                    ,A.delivery_zip_code
-                    ,A.weeks_remaining
-                    -- ,A.delivery_region
-                    ,A.delivery_instructions
-                    ,A.purchase_status
-                FROM ms.purchases A
-                WHERE
-                    purchase_status = "ACTIVE"
-                ) pur
-                JOIN (
-                -- payments query
-                    SELECT
-                        _ms.purchase_id  AS payment_purchase_id
-                        ,_ms.payment_id
-                        , p2.customer_id
-                        ,_ms.payment_timestamp
-                        ,_ms.coupon_id 
-                        ,_ms.gift
-                        ,_ms.amount_due
-                        ,_ms.amount_paid
-                        ,_ms.purchase_id
-                        -- ,ms3.payment_type
-                        ,CONCAT('XXXXXXXXXXXX', right(_ms.cc_num,4)) AS cc_num
-                        ,_ms.cc_expired_date
-                        ,_ms.cc_cvv
-                        -- ,ms3.billing_zip
-                    FROM
-                        ms.payments _ms 
-                    JOIN (
-                    SELECT customer_id, purchase_id FROM ms.purchases) p2
-                    ON _ms.purchase_id = p2.purchase_id
-                    INNER JOIN (
-                        SELECT
-                            B.purchase_id,
-                            B.payment_id,
-                            MAX(B.payment_timestamp) AS latest_payment
-                            FROM ms.payments B
-                            GROUP BY B.purchase_id
-                        ) ms4 ON _ms.purchase_id = ms4.purchase_id AND payment_timestamp = latest_payment
-                ) pay 
-                ON pur.purchase_id = pay.purchase_id
-                JOIN (
-                -- meal plan query
-                SELECT 
-                    B.meal_plan_id
-                    ,B.num_meals AS MaximumMeals
-                    ,B.meal_plan_desc
-                    ,B.payment_frequency
-                    ,B.meal_plan_price
-                FROM 
-                    ms.meal_plans B
-                ) plans
-                ON pur.meal_plan_id = plans.meal_plan_id
-                LEFT JOIN (
-                -- ADDON query
-                        SELECT
-                            purchase_id,
-                            week_affected,
-                            SUM(total) AS total_addons,
-                            SUM(charge) AS total_charge
-                        FROM ( # QUERY 11
-                            SELECT purchase_id
-                                , week_affected
-                                , meal_selected
-                                , meal_name
-                                , COUNT(num) as total
-                                , extra_meal_price
-                                , COUNT(num) * extra_meal_price as charge
-                            FROM (
-                                SELECT *
-                                    , substring_index(substring_index(meal_selection,';',n),';',-1) AS meal_selected
-                                    , n AS num
-                                FROM (# QUERY 1
-                                   SELECT
-                                        ms1.purchase_id
-                                        -- ,ms2.purchase_id
-                                        , ms1.week_affected
-                                        -- , ms2.week_affected
-                                        , "0" AS num_meals
-                                        , "0" AS delivery_day
-                                        , ms1.meal_selection
-                                        -- , ms1.selection_time
-                                        -- , ms2.latest_selection
-                                        -- , ms1.delivery_day
-                                    FROM ms.addons_selected AS ms1
-                                    INNER JOIN (
-                                        SELECT
-                                            purchase_id
-                                            , week_affected
-                                            , meal_selection
-                                            , MAX(selection_time) AS latest_selection
-                                            -- , delivery_day
-                                        FROM ms.addons_selected
-                                        GROUP BY purchase_id
-                                            , week_affected
-                                    ) as ms2 
-                                    ON ms1.purchase_id = ms2.purchase_id 
-                                        AND ms1.week_affected = ms2.week_affected 
-                                        AND ms1.selection_time = ms2.latest_selection
-                                    ORDER BY purchase_id
-                                        , week_affected)
-                                        AS combined
-                                    JOIN numbers ON char_length(meal_selection) - char_length(replace(meal_selection, ';', '')) >= n - 1)
-                                AS sub
-                            LEFT JOIN ms.meals meals ON sub.meal_selected = meals.meal_id
-                            GROUP BY purchase_id
-                                , week_affected
-                                , meal_selected
-                            ORDER BY purchase_id
-                                , week_affected
-                                , num_meals
-                                , meal_selected)
-                            AS addons
-                        WHERE week_affected = \'""" + sat + """\'
-                        GROUP BY purchase_id,
-                            week_affected
-                ) addon
-                ON pur.purchase_id = addon.purchase_id
-                WHERE pur.customer_id = '""" + customer_id + """'
-                GROUP BY pay.payment_id;""",
-                       "   SELECT * FROM monday_zipcodes;"]
+                if purchase['sel_menu_date'] not in result[purchase['purchase_id']]:
+                    result[purchase['purchase_id']][purchase['sel_menu_date']] = {}
 
-            items = execute(queries[0], 'get', conn)
-            print(items)
-            mondayZipsQuery = execute(queries[1], 'get', conn)
-            print(mondayZipsQuery)
-            mondayZips = []
-            for eachZip in mondayZipsQuery['result']:
-                mondayZips.append(eachZip['zipcode'])
-            print(mondayZips)
-
-            del mondayZipsQuery
-
-            for eachItem in items['result']:
-                # last_charge_date = datetime.strptime(eachItem['last_payment_time_stamp'], '%Y-%m-%d %H:%M:%S')
-                # next_charge_date = None
-
-                # if eachItem['payment_frequency'] == 'Weekly':
-                #     next_charge_date = last_charge_date + timedelta(days=7)
-                # elif eachItem['payment_frequency'] == 'Bi-Weekly':
-                #     next_charge_date = last_charge_date + timedelta(days=14)
-                # elif eachItem['payment_frequency'] == 'Monthly':
-                #     next_charge_date = last_charge_date + timedelta(days=28)
-
-                # eachItem['paid_weeks_remaining'] = str(int((next_charge_date - datetime.now()).days / 7) + 1)
-                # eachItem['next_charge_date'] = str(next_charge_date.date())
-
-                if eachItem['delivery_zip_code'] in mondayZips:
-                    eachItem['monday_available'] = True
-                else:
-                    eachItem['monday_available'] = False
-
-            response['message'] = 'Request successful.'
-            response['result'] = items['result']
+                result[purchase['purchase_id']][purchase['sel_menu_date']] = {
+                    'meals_selected' : purchase['meal_selection'],
+                    'addons_selected': purchase['addon_selection'],
+                    'delivery_day': purchase['delivery_day']
+                }
+            response['message'] = "Successful."
+            response['result'] = result
             return response, 200
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+
 # Bing API - start
 class Coordinates:
     # array of addresses such as
     # ['Dunning Ln, Austin, TX 78746', '12916 Cardinal Flower Drive, Austin, TX 78739', '51 Rainey St., austin, TX 78701']
     def __init__(self, locations):
         self.locations = locations
+
+    # returns an address formatted to be used for the Bing API to get locations
+    def formatAddress(self, address):
+        output = address.replace(" ", "%20")
+        if "." in output:
+            output = output.replace(".", "")
+        return output
 
     def calculateFromLocations(self):
         global BING_API_KEY
@@ -1046,320 +1007,389 @@ class Coordinates:
         # prints lat, long points for each address
         for i in coordinates:
             print(i, "\n")
-            print(type(i["latitude"]))
+            print(type(["latitude"]))
 
         # return array of dictionaries containing lat, long points
         return coordinates
 
-    # returns an address formatted to be used for the Bing API to get locations
-    def formatAddress(self, address):
-        output = address.replace(" ", "%20")
-        if "." in output:
-            output = output.replace(".", "")
-        return output
+
+
+def get_latest_purchases(bussiness_id, customer_id):
+    response = {}
+    try:
+        conn = connect()
+        query = """SELECT *
+                            FROM sf.purchases pur
+                            LEFT JOIN sf.customers c
+                            ON pur.customer_id = c.customer_id
+                            LEFT JOIN latest_payment
+                            AS pay
+                            ON pur.purchase_id = pay.purchase_id
+                            WHERE business_id = '""" + bussiness_id + """';"""
+        res = execute(query, 'get', conn)
+        if res['code'] != 280:
+            response['message'] = res['message']
+            response['result'] = None
+            return response
+        for r in res['result']:
+            if r['customer_id'] == customer_id:
+                response['message'] = 'Succeeded'
+                response['result'] = r
+                return response
+        response['message'] = 'Not found'
+        response['result'] = None
+        return response
+    except:
+        raise BadRequest('Request failed, please try again later.')
+    finally:
+        disconnect(conn)
+
+class Latest_purchase_info (Resource):
+    def get(self):
+        response = {}
+        try:
+            conn = connect()
+            business_id = request.args.get('business_id')
+            customer_id = request.args.get('customer_id')
+            res = get_latest_purchases(business_id, customer_id)
+            if res['result'] is None:
+                response['message'] = res['message']
+                return response, 500
+            res['result']['cc_num'] = "XXXXXXXXXXXX" + str(res['result']['cc_num'][:-4])
+            response['message'] = "Successful."
+            response['result'] = res
+            return response, 200
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
 
 class Checkout(Resource):
-    def getDates(self, frequency):
-        dates = {}
-        dayOfWeek = date.today().weekday()
-
-        # Get the soonest Thursday, same day if today is Thursday
-        thurs = date.today() + timedelta(days=(3 - dayOfWeek) % 7)
-
-        # If today is Thursday after 4PM
-        if thurs == date.today() and datetime.now().hour >= 16:
-            thurs += timedelta(days=7)
-
-        # Set start date to Saturday after thurs
-        #       dates['startDate'] = thurs + timedelta(days=2)
-        dates['startDate'] = (thurs + timedelta(days=2)).strftime("%Y-%m-%d")
-
-        # Set end date to 1st/2nd/4th Monday after thurs
-        # Set next billing date to Friday after the end date
-        if frequency == 'Weekly':
-            dates['endDate'] = (thurs + timedelta(days=4)).strftime("%Y-%m-%d")
-            dates['billingDate'] = (
-                    thurs + timedelta(days=7)).strftime("%Y-%m-%d")
-            dates['weeksRemaining'] = '1'
-        elif frequency == '2 Week Pre-Pay':
-            dates['endDate'] = (thurs + timedelta(days=11)
-                                ).strftime("%Y-%m-%d")
-            dates['billingDate'] = (
-                    thurs + timedelta(days=14)).strftime("%Y-%m-%d")
-            dates['weeksRemaining'] = '2'
-        elif frequency == '4 Week Pre-Pay':
-            dates['endDate'] = (thurs + timedelta(days=25)
-                                ).strftime("%Y-%m-%d")
-            dates['billingDate'] = (
-                    thurs + timedelta(days=28)).strftime("%Y-%m-%d")
-            dates['weeksRemaining'] = '4'
-
-        return dates
-
-    def getPaymentQuery(self, data, couponID, paymentId, stripe_chargeID, purchaseId):
-
-        stripe_charge_id = "'" + stripe_chargeID + "'"  if stripe_chargeID is not None else 'NULL'
-
-        couponID = 'NULL' if couponID is None or couponID == "" else "'" + couponID + "'"
-
-        amount_due = round(float(data['total_charge']) + float(data['total_discount']), 2)
-
-        query = """ INSERT INTO payments
-                    (
-                        payment_id,
-                        purchase_id,
-                        start_delivery_date,
-                        recurring,
-                        gift,
-                        coupon_id,
-                        amount_due,
-                        amount_discount,
-                        amount_paid,
-                        payment_timestamp,
-                        payment_type,
-                        stripe_charge_id,
-                        cc_num,
-                        cc_expired_date,
-                        cc_cvv,
-                        cc_billing_zip,
-                        isAddon
-                    )
-                    VALUES (
-                        \'""" + paymentId + """\',
-                        \'""" + purchaseId + """\',
-                        \'""" + data['start_delivery_date'] + """\',
-                        \'TRUE\',
-                        \'""" + str(data['is_gift']).upper() + """\',
-                        """ + couponID + """,
-                        \'""" + str(amount_due) + """\',
-                        \'""" + str(round(float(data['total_discount']),2)) + """\',
-                        \'""" + str(round(float(data['total_charge']),2)) + """\',
-                        \'""" + getNow() + """\',
-                        'STRIPE',
-                        """ + stripe_charge_id + """,
-                        \'""" + data['cc_num'] + """\',
-                        \'""" + data['cc_exp_year'] + "-" + data['cc_exp_month'] + """-01\',
-                        \'""" + data['cc_cvv'] + """\',
-                        \'""" + data['billing_zip'] + """\',
-                        'FALSE');"""
-        return query
-
-
-
     def post(self):
         response = {}
         reply = {}
         try:
             conn = connect()
             data = request.get_json(force=True)
-            print("Received:", data)
+            customer_id = data['customer_id']
+            business_id = data['business_id']
+            delivery_first_name = data['delivery_first_name']
+            delivery_last_name = data['delivery_last_name']
+            delivery_email = data['delivery_email']
+            delivery_phone = data['delivery_phone']
+            delivery_address = data['delivery_address']
+            delivery_unit = data['delivery_unit']
+            delivery_city = data['delivery_city']
+            delivery_state = data['delivery_state']
+            delivery_zip = data['delivery_zip']
+            delivery_instructions = "'" + data['delivery_instructions'] + "'" if data.get('delivery_instructions') is not None else 'NULL'
+            delivery_longitude = data['delivery_longitude']
+            delivery_latitude = data['delivery_latitude']
+            items = data['items']
+            order_instructions = "'" + data['order_instructions'] + "'" if data.get('order_instructions') is not None else 'NULL'
+            purchase_notes = "'" + data['purchase_notes'] + "'" if data.get('purchase_notes') is not None else 'NULL'
+            amount_due = data['amount_due']
+            amount_discount = data['amount_discount']
+            amount_paid = data['amount_paid']
 
-            if data['delivery_address_unit'] == None or data['delivery_address_unit'] == "":
-                data['delivery_address_unit'] = 'NULL'
-            else:
-                data['delivery_address_unit'] = '\'' + data['delivery_address_unit'] + '\''
+            cc_num = data['cc_num']
+            cc_exp_date = data['cc_exp_year'] + data['cc_exp_month'] + "01"
+            cc_cvv = data['cc_cvv']
+            cc_zip = data['cc_zip']
 
-
-            def get_new_paymentID():
-                newPaymentQuery = execute(
-                    "CALL get_new_payment_id", 'get', conn)
-                if newPaymentQuery['code'] == 280:
-                    return newPaymentQuery['result'][0]['new_id']
-                return "Could not generate new payment ID", 500
-            def get_new_purchaseID():
-                newPurchaseQuery = execute(
-                    "CALL get_new_purchase_id", 'get', conn)
-                if newPurchaseQuery['code'] == 280:
-                    return newPurchaseQuery['result'][0]['new_id']
-                return "Could not generate new purchase ID", 500
-
-            purchaseId = get_new_purchaseID()
+            purchaseId = get_new_purchaseID(conn)
             if purchaseId[1] == 500:
-                return purchaseId
-            paymentId = get_new_paymentID()
+                response['message'] = "Internal Server Error."
+                return response, 500
+            paymentId = get_new_paymentID(conn)
             if paymentId[1] == 500:
-                return paymentId
-
-            mealPlan = data['item'].split(' Subscription')[0]
-
-            queries = ["""
-                SELECT
-                    subscription_id
-                    , payment_frequency
-                FROM
-                    subscriptions
-                WHERE
-                    subscription_desc = \'""" + mealPlan + "\'", """
-                SELECT
-                    cc_num
-                FROM
-                    payments pay, purchases pur
-                WHERE
-                    pay.purchase_id = pur.purchase_id
-                    AND customer_id = \'""" + data['user_id'] + "\';"]
-
-
+                response['message'] = "Internal Server Error."
+                return response, 500
             # User authenticated
             # check the customer_id and see what kind of registration.
             # if it was registered by email then check the password.
-            customer_query = """SELECT * FROM customers WHERE customer_id = '""" + data['user_id'] + """';"""
+            customer_query = """SELECT * FROM customers WHERE customer_id = '""" + data['customer_id'] + """';"""
             customer_res = execute( customer_query, 'get', conn)
 
             if customer_res['code'] != 280 or not customer_res['result']:
                 response['message'] = "Could not authenticate user"
                 return response, 401
-            if customer_res['result'][0]['registered_by'] == "email":
+            if customer_res['result'][0]['password_hashed'] is not None:
                 if customer_res['result'][0]['password_hashed'] != data['salt']:
                     response['message'] = "Could not authenticate user. Wrong Password"
                     return response, 401
-            mealPlanQuery = execute(queries[0], 'get', conn)
-
-            if mealPlanQuery['code'] == 280:
-                print("Getting meal plan ID...")
-                print(mealPlanQuery)
-                mealPlanId = mealPlanQuery['result'][0]['subscription_id']
-                dates = self.getDates(
-                    mealPlanQuery['result'][0]['payment_frequency'])
-                print("Meal Plan ID:", mealPlanId)
-                print()
-                data['start_delivery_date'] = (datetime.strptime(dates['startDate'], "%Y-%m-%d") + timedelta(days=2)).strftime("%Y-%m-%d")
-            else:
-                response['message'] = 'Could not retrieve meal ID of requested plan.'
-                response['error'] = mealPlanQuery
-                print("Error:", response['message'])
-                print("Error JSON:", response['error'])
-                return response, 501
-
-            # replace with real longitute and latitude
-            addressObj = Coordinates([data['delivery_address']])
-            delivery_coord = addressObj.calculateFromLocations()[0]
-
-            # If a key of the coordinates object is None, set to NULL
-            # Otherwise wrap quotation marks around it
-            # This is because delivery_lat and delivery_long are VARCHAR in db
-            for key in delivery_coord:
-                if delivery_coord[key] == None:
-                    delivery_coord[key] = 'NULL'
-                else:
-                    delivery_coord[key] = '\'' + \
-                                          str(delivery_coord[key]) + '\''
-            purchase_query = """ INSERT INTO purchases
-                    (
-                        purchase_timestamp,
-                        purchase_id,
-                        purchase_status,
-                        customer_id,
-                        subscription_id,
-                        delivery_first_name,
-                        delivery_last_name,
-                        delivery_phone_num,
-                        delivery_email,
-                        delivery_address,
-                        delivery_address_unit,
-                        delivery_city,
-                        delivery_state,
-                        delivery_zip_code,
-                        delivery_long,
-                        delivery_lat,
-                        delivery_instructions
-                    )
-                    VALUES
-                    (
-                        \'""" + str(getNow()) + """\',
-                        \'""" + str(purchaseId) + """\',
-                        \'ACTIVE\',
-                        \'""" + str(data['user_id']) + """\',
-                        \'""" + str(mealPlanId) + """\',
-                        \'""" + str(data['delivery_first_name']) + """\',
-                        \'""" + str(data['delivery_last_name']) + """\',
-                        \'""" + str(data['delivery_phone']) + """\',
-                        \'""" + str(data['delivery_email']) + """\',
-                        \'""" + str(data['delivery_address']) + """\',
-                        """ + str(data['delivery_address_unit']) + """,
-                        \'""" + str(data['delivery_city']) + """\',
-                        \'""" + str(data['delivery_state']) + """\',
-                        \'""" + str(data['delivery_zip']) + """\',
-                        """ + str(delivery_coord['longitude']) + """,
-                        """ + str(delivery_coord['latitude']) + """,
-                        \'""" + str(data['delivery_instructions']) + """\');"""
 
             # Validate credit card
-            if data['cc_num'][0:12] == "XXXXXXXXXXXX":
-                last_four_digits = data['cc_num'][12:]
-
-                select_card_query = """SELECT cc_num FROM (SELECT p2.* FROM payments p2, purchases pur
-                                                WHERE pur.purchase_id = p2.purchase_id
-                                                AND pur.customer_id = '""" + data['user_id'] + """'
-                                                AND RIGHT(cc_num, 4) = '""" + last_four_digits + """'
-                                                AND cc_expired_date = '""" + data['cc_exp_year'] + "-" + data['cc_exp_month'] + """-01'
-                                                AND cc_cvv = '""" + data['cc_cvv'] + """') AS p
-                                        WHERE payment_timestamp = (SELECT MAX(payment_timestamp) FROM payments p2, purchases pur
-                                                                        WHERE pur.purchase_id = p2.purchase_id
-                                                                        AND pur.customer_id = '""" + data['user_id'] + """'
-                                                                        AND RIGHT(cc_num, 4) = '""" + last_four_digits + """'
-                                                                        AND cc_expired_date = '""" + data['cc_exp_year'] + "-" + data['cc_exp_month'] + """-01'
-                                                                        AND cc_cvv = '""" + data['cc_cvv'] + """')
-                                        AND cc_num IS NOT NULL;"""
-
-                card_selected = execute(select_card_query, 'get', conn)
-                if not card_selected['result']:
-                    response['message'] = "Credit card info is incorrect."
+            if str(data['cc_num'][0:12]) == "XXXXXXXXXXXX":
+                latest_purchase = get_latest_purchases(business_id, customer_id)
+                if latest_purchase['result'] is None:
+                    response['message'] = "Credit card number is invalid."
                     return response, 400
-                # update data['cc_num'] to write to database
-                data['cc_num'] = card_selected['result'][0].get('cc_num')
+                if str(latest_purchase['result']['cc_num'][:-4]) != str(data['cc_num'][:-4]):
+                    response['message'] = "Credit card number is invalid."
+                    return response, 400
+                cc_num = latest_purchase['result']['cc_num']
 
-            #checking for coupon and preparing for stripe charge
-
-            coupon_id = data.get('coupon_id')
-            if coupon_id == "" or coupon_id is None:
-                charge = round(float(data['total_charge']),2)
-            else:
-                charge = round(float(data['total_charge']) - float(data['total_discount']), 2)
             # create a stripe charge and make sure that charge is successful before writing it into database
             # we should use Idempotent key to prevent sending multiple payment requests due to connection fail.
+            # Also, It is not safe for using Strip Charge API. We should use Stripe Payment Intent API and its SDKs instead.
             try:
-                #create a token for stripe
-                card_dict = {"number": data['cc_num'], "exp_month": int(data['cc_exp_month']),"exp_year": int(data['cc_exp_year']),"cvc": data['cc_cvv']}
-
+                # create a token for stripe
+                card_dict = {"number": data['cc_num'], "exp_month": int(data['cc_exp_month']), "exp_year": int(data['cc_exp_year']),"cvc": data['cc_cvv']}
                 try:
                     card_token = stripe.Token.create(card=card_dict)
                     stripe_charge = stripe.Charge.create(
-                        amount=int(round(charge*100, 0)),
+                        amount=int(round(float(amount_paid)*100, 0)),
                         currency="usd",
                         source=card_token,
-                        description="Charge customer %s for %s" %(data['delivery_first_name'] + " " + data['delivery_last_name'], data['item']),)
+                        description="Charge customer %s for %s" %(data['delivery_first_name'] + " " + data['delivery_last_name'], data['items']))
                 except stripe.error.CardError as e:
                     # Since it's a decline, stripe.error.CardError will be caught
                     response['message'] = e.error.message
                     return response, 400
 
+                # update coupon table
+                coupon_id = data.get('coupon_id')
                 if str(coupon_id) != "" and coupon_id is not None:
                     # update coupon table
                     coupon_id = "'" + coupon_id + "'"
                     coupon_query = """UPDATE coupons SET num_used = num_used + 1
                                 WHERE coupon_id =  """ + str(coupon_id) + ";"
                     res = execute(coupon_query, 'post', conn)
+                else:
+                    coupon_id = 'NULL'
+                charge_id = 'NULL' if stripe_charge.get('id') is None else "'" + stripe_charge.get('id') + "'"
+                # write into Payments table
 
-                payment_query = self.getPaymentQuery(data, coupon_id, paymentId, stripe_charge.get('id'), purchaseId)
-
+                payment_query = '''
+                                INSERT INTO sf.payments
+                                SET payment_uid = \'''' + paymentId + '''\',
+                                    payment_time_stamp = \'''' + getNow() + '''\',
+                                    payment_id = \'''' + paymentId + '''\',
+                                    pay_purchase_id = \'''' + purchaseId + '''\',
+                                    amount_due = \'''' + amount_due + '''\',
+                                    amount_discount = \'''' + amount_discount + '''\',
+                                    amount_paid = \'''' + amount_paid + '''\',
+                                    pay_coupon_id = ''' + coupon_id + ''',
+                                    charge_id = ''' + charge_id + ''',
+                                    payment_type = 'STRIPE',
+                                    info_is_Addon = 'FALSE',
+                                    cc_num = \'''' + cc_num + '''\', 
+                                    cc_exp_date = \'''' + cc_exp_date + '''\', 
+                                    cc_cvv = \'''' + cc_cvv + '''\', 
+                                    cc_zip = \'''' + cc_zip + '''\';
+                                '''
                 reply['payment'] = execute(payment_query, 'post', conn)
-
                 if reply['payment']['code'] != 281:
+                    print("*************************************")
+                    print("* Cannot write into PAYMENTS table *")
+                    print("*************************************")
                     response['message'] = "Internal Server Error"
                     return response, 500
-                print(purchase_query)
-                reply['purchase'] = execute(purchase_query, 'post', conn)
-                print(reply['purchase'])
-                if reply['purchase']['code'] != 281:
-                    response['message'] = "Internal Server Error"
-                    return response, 500
+                purchase_query = '''INSERT INTO  sf.purchases
+                                        SET purchase_uid = \'''' + purchaseId + '''\',
+                                            purchase_date = \'''' + getToday() + '''\',
+                                            purchase_id = \'''' + purchaseId + '''\',
+                                            purchase_status = 'ACTIVE',
+                                            pur_customer_id = \'''' + customer_id + '''\',
+                                            pur_business_id = \'''' + business_id + '''\',
+                                            delivery_first_name = \'''' + delivery_first_name + '''\',
+                                            delivery_last_name = \'''' + delivery_last_name + '''\',
+                                            delivery_email = \'''' + delivery_email + '''\',
+                                            delivery_phone_num = \'''' + delivery_phone + '''\',
+                                            delivery_address = \'''' + delivery_address + '''\',
+                                            delivery_unit = \'''' + delivery_unit + '''\',
+                                            delivery_city = \'''' + delivery_city + '''\',
+                                            delivery_state = \'''' + delivery_state + '''\',
+                                            delivery_zip = \'''' + delivery_zip + '''\',
+                                            delivery_instructions = ''' + delivery_instructions + ''',
+                                            delivery_longitude = \'''' + delivery_longitude + '''\',
+                                            delivery_latitude = \'''' + delivery_latitude + '''\',
+                                            items = \'''' + items + '''\',
+                                            order_instructions = ''' + order_instructions + ''',
+                                            purchase_notes = ''' + purchase_notes + ''';'''
 
+                reply['purchase'] = execute(purchase_query, 'post', conn)
+                if reply['purchase']['code'] != 281:
+                    print("*************************************")
+                    print("* Cannot write into PURCHASES table *")
+                    print("*************************************")
+                    execute("""DELETE FROM payments WHERE payment_uid = '""" + paymentId + """';""", 'post', conn)
+                    response['message'] = "Internal Server Error"
+                    return response, 500
                 response['message'] = 'Request successful.'
                 response['result'] = reply
                 return response, 200
             except:
+                if "paymentId" in locals() and "purchaseId" in locals():
+                    execute("""DELETE FROM payments WHERE payment_uid = '""" + paymentId + """';""", 'post', conn)
+                    execute("""DELETE FROM purchases WHERE purchase_uid = '""" + purchaseId + """';""", 'post', conn)
                 response['message'] = "Payment process error."
                 return response, 500
+        except:
+            if "paymentId" in locals() and "purchaseId" in locals():
+                execute("""DELETE FROM payments WHERE payment_uid = '""" + paymentId + """';""", 'post', conn)
+                execute("""DELETE FROM purchases WHERE purchase_uid = '""" + purchaseId + """';""", 'post', conn)
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+# ---------- ADMIN ENDPOINTS ----------------#
+# admin endpoints start from here            #
+#--------------------------------------------#
+
+# Endpoint for Create/Edit menu
+class Get_Menu (Resource):
+    def get(self):
+        response = {}
+        try:
+            conn = connect()
+            date = request.args.get('date')
+
+            queries = ["""
+                    SELECT * FROM sf.menu
+                    LEFT JOIN sf.meals m
+                        ON menu.menu_meal_id = m.meal_id;
+                    """
+                    ,
+                     """
+                     SELECT * FROM sf.menu
+                     LEFT JOIN sf.meals m
+                        ON menu.menu_meal_id = m.meal_id
+                     WHERE menu.menu_date = '""" + str(date) + """';
+                     """]
+
+            if date is None:
+                return simple_get_execute(queries[0], __class__.__name__, conn)
+            else:
+                return simple_get_execute(queries[1], __class__.__name__, conn)
+        except:
+            raise BadRequest("Request failed, Please try again later.")
+        finally:
+            disconnect(conn)
+
+class Get_Meals (Resource):
+    def get(self):
+        response = {}
+        try:
+            conn = connect()
+            query = """
+                    SELECT * FROM sf.meals m;
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+class Get_Coupon(Resource):
+    def get(self):
+        response = {}
+        try:
+            conn = connect()
+            query = """
+                    # ADMIN QUERY 6: COUPONS
+                    SELECT * FROM sf.coupons cup
+                    WHERE cup.cup_business_id IS NULL;
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+class Get_Orders_By_Purchase_Id(Resource):
+    def get(self):
+        response = {}
+        try:
+            conn = connect()
+            business_id = request.args['business_id']
+            query = """
+                    # ADMIN QUERY 8: ORDERS BY PURCHASE_ID
+                    SELECT *,
+                        COUNT(n) as quantity
+                    FROM (
+                        SELECT purchase_id,
+                            menu_date,
+                            substring_index(substring_index(final_selection,';',n),';',-1) AS final_meals_selected,
+                            n
+                        FROM (# QUERY 2: MASTER QUERY:  WHO ORDERED WHAT INCLUDING DEFAULTS AND SELECTIONS
+                              # MODIFIED TO SHOW ONLY PURCHASE_ID, MENU_DATE AND FINAL_MEAL_SELECTIONS
+                            SELECT 
+                                purchase_id,
+                                menu_date,
+                                CASE
+                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 5  THEN  def_5_meal
+                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 10  THEN  def_10_meal
+                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 15  THEN  def_15_meal
+                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 20  THEN  def_20_meal
+                                    ELSE meal_selection
+                                    END 
+                                    AS final_selection
+                            FROM (
+                                SELECT *
+                                FROM sf.lpsilp,
+                                    sf.default_meal)
+                                AS lpsilpdm
+                            LEFT JOIN sf.latest_combined_meal AS lcm
+                                ON lpsilpdm.purchase_id = lcm.sel_purchase_id AND
+                                    lpsilpdm.menu_date = lcm.sel_menu_date
+                            WHERE lpsilpdm.pur_business_id = '""" + business_id + """') 
+                            AS final_meals
+                        JOIN numbers ON char_length(final_selection) - char_length(replace(final_selection, ';', '')) >= n - 1)
+                            AS sub
+                    GROUP BY purchase_id,
+                        menu_date,
+                        final_meals_selected;
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+class Get_Orders_By_Menu_Date (Resource):
+    def get(self):
+        try:
+            conn = connect()
+            business_id = request.args['business_id']
+            query = """
+                    # ADMIN QUERY 9: ORDERS BY MENU_DATE
+                    SELECT *,
+                        COUNT(n) as quantity
+                    FROM (
+                        SELECT menu_date,
+                            substring_index(substring_index(final_selection,';',n),';',-1) AS final_meals_selected,
+                            n
+                        FROM (# QUERY 2: MASTER QUERY:  WHO ORDERED WHAT INCLUDING DEFAULTS AND SELECTIONS
+                              # MODIFIED TO SHOW ONLY PURCHASE_ID, MENU_DATE AND FINAL_MEAL_SELECTIONS
+                            SELECT
+                                purchase_id,
+                                menu_date,
+                                CASE
+                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 5  THEN  def_5_meal
+                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 10  THEN  def_10_meal
+                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 15  THEN  def_15_meal
+                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 20  THEN  def_20_meal
+                                    ELSE meal_selection
+                                    END
+                                    AS final_selection
+                            FROM (
+                                SELECT *
+                                FROM sf.lpsilp,
+                                    sf.default_meal)
+                                AS lpsilpdm
+                            LEFT JOIN sf.latest_combined_meal AS lcm
+                                ON lpsilpdm.purchase_id = lcm.sel_purchase_id AND
+                                    lpsilpdm.menu_date = lcm.sel_menu_date
+                            WHERE lpsilpdm.pur_business_id = '""" + business_id + """')
+                            AS final_meals
+                        JOIN numbers ON char_length(final_selection) - char_length(replace(final_selection, ';', '')) >= n - 1)
+                            AS sub
+                    GROUP BY menu_date,
+                        final_meals_selected;
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
@@ -1372,7 +1402,7 @@ class Add_New_Ingredient(Resource):
         try:
             conn = connect()
             data = request.get_json(force=True)
-            print(data)
+
             ingredient_desc = data['ingredient_desc']
             package_size = data['package_size']
             ingredient_measure_id = data['ingredient_measure_id']
@@ -1451,6 +1481,7 @@ class All_Payments(Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+
 class DisplaySaturdays(Resource):
     def get(self):
         response = {}
@@ -2173,16 +2204,93 @@ class SavePurchaseNote(Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+
 # Define API routes
 # Customer APIs
-api.add_resource(Meals, '/api/v2/meals', '/api/v2/meals/<string:startDate>')
+
+#---------------------------- Select Meal plan pages ----------------------------#
+#  * The "plans" endpoint accepts only get request without any parameter. It will#
+# return all the meal plans in the SUBSCRIPTION_ITEM table. The returned info    #
+# contains all meal plans (which is grouped by item's name) and its associated   #
+# details.                                                                       #
 api.add_resource(Plans, '/api/v2/plans')
+#--------------------------------------------------------------------------------#
+
+#---------------------------- Signup/ Login page --------------------------------#
+#  * The "signup" endpoint accepts only POST request with appropriate named      #
+#  parameters. Please check the documentation for the right format of those named#
+#  parameters.                                                                   #
 api.add_resource(SignUp, '/api/v2/signup')
-api.add_resource(AccountSalt, '/api/v2/accountsalt/<string:accEmail>')
-api.add_resource(AccountPurchases, '/api/v2/accountpurchases/<string:customer_id>')
+
+api.add_resource(Login, '/api/v2/login')
+#--------------------------------------------------------------------------------#
+
+#------------- Checkout, Meal Selection and Meals Schedule pages ----------------#
+#  * The "Meals" endpoint only accepts GET request with an optional parameter. It#
+# will return the whole available menu info. If the "startDate" param is given.  #
+# The returning menu info only contain the menu which starts from that date.     #
+# Notice that the optional parameter must go after the slash.
+api.add_resource(Meals, '/api/v2/meals', '/api/v2/meals/<string:startDate>')
+#  * The "accountsalt" endpoint accepts only GET request with a required param.  #
+#  It will return the information of password hased and password salt for an     #
+# associated email account.
+api.add_resource(AccountSalt, '/api/v2/accountsalt')
+#  * The "accountpurchases" only accepts GET request with 2 required parameters. #
+#  It will return the information of all current purchases of a specific customer#
+#  of a specific business. Accepting arguments for this endpoints are:           #
+#  "customer_id", "business_id".                                                 #
+api.add_resource(AccountPurchases, '/api/v2/accountpurchases')
+#  * The "next_billing_date" only accepts GET request with 1 required parameter. #
+#  It will return the information of the next billing date of a specific business#
+# The required parameter is: "business_id
+api.add_resource(Next_Billing_Date, '/api/v2/next_billing_date')
+#  * The "next_addon_charge" only accepts GET request without any parameter. It  #
+# will return the next addon charge information.
+api.add_resource(Next_Addon_Charge, '/api/v2/next_addon_charge')
+#  * The "selectedmeals" only accepts GET request with two required arguments:   #
+# "customer_id" and "business_id".It will return the information of all selected #
+# meals and addons which are associated with the specific purchase.              #
+api.add_resource(SelectedMeals, '/api/v2/selectedmeals')
+#  * The "checkout" accepts POST request with appropriate arguments. Please read #
+# the documentation for these arguments and its formats.                         #
 api.add_resource(Checkout, '/api/v2/checkout')
+#--------------------------------------------------------------------------------#
+
+
 
 # Admin APIs
+#---------------------------- Create / Edit Menu pages ---------------------------#
+#  * The get_menu endpoint accepts only get request and returns the menu's        #
+#  information. If there is a given param (named "date") in the get request.      #
+#  The returned info will associate with that "date" otherwise all information in #
+#  the menu table will be returned.                                               #
+api.add_resource(Get_Menu, '/api/v2/get_menu')
+#  * The get_meals endpoint accepts only get request and return all associate     #
+#   info. This endpoint does not accept any argument.                             #
+# Notice: these two endpoint will replace the old three ones that were using in   #
+# PTYD website. from these two endpoint, the front end can extract whatever info  #
+# it needs.                                                                       #
+api.add_resource(Get_Meals, '/api/v2/get_meals')
+#---------------------------------------------------------------------------------#
+
+#-------------------------------- Plan / Coupon pages ----------------------------#
+#  * The user can access /api/v2/plans endpoint to get all Plans.                 #
+#  * The Get_coupon endpoint accepts only GET request with a required argument    #
+#  ("business_id"). This endpoint will returns all active coupons in the COUPON   #
+#  table.                                                                         #
+api.add_resource(Get_Coupon, '/api/v2/get_coupons')
+
+#  * The Get_Orders_By_Purchase_id endpoint accepts only GET request without any  #
+#  parameters. It will return meal orders based on the purchase_id.               #
+api.add_resource(Get_Orders_By_Purchase_Id, '/api/v2/get_orders_by_purchases_id')
+#  * The Get_Orders_By_Menu_Date endpoint accepts only GET request without any    #
+#  parameters. It will return meal orders based on the menu date.                 #
+api.add_resource(Get_Orders_By_Menu_Date, '/api/v2/get_orders_by_menu_date')
+
+
+#***********************************************************************************
+# The endpoints below have not been tested. Just moved from old PTYD               *
+#***********************************************************************************
 api.add_resource(Add_New_Ingredient, '/api/v2/Add_New_Ingredient')
 api.add_resource(All_Payments, '/api/v2/All_Payments/<string:user_id>')
 api.add_resource(DisplaySaturdays, '/api/v2/saturdays')
@@ -2192,9 +2300,11 @@ api.add_resource(MealCreation, '/api/v2/mealcreation')
 api.add_resource(All_Ingredients, '/api/v2/All_Ingredients')
 api.add_resource(All_Meals, '/api/v2/All_Meals')
 api.add_resource(SavePurchaseNote,'/api/v2/SavePurchaseNote/<string:purchase_id>')
+#***********************************************************************************
+
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
-# lambda function: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
+# lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=2000)
 
