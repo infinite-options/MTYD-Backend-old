@@ -99,7 +99,6 @@ def disconnect(conn):
 # Serialize JSON
 def serializeResponse(response):
     try:
-        print("here")
         for row in response:
             for key in row:
                 if type(row[key]) is Decimal:
@@ -163,10 +162,7 @@ def get_new_purchaseID(conn):
 
 def simple_get_execute(query, name_to_show, conn):
     response = {}
-    print("query: ", query)
     res = execute(query, 'get', conn)
-
-    print (res)
     if res['code'] != 280:
         string = " Cannot run the query for " + name_to_show + ". "
         print("*" * (len(string) + 10))
@@ -186,7 +182,6 @@ def simple_get_execute(query, name_to_show, conn):
 class SignUp(Resource):
     def post(self):
         response = {}
-        items = []
         try:
             conn = connect()
             should_delete = False
@@ -229,7 +224,7 @@ class SignUp(Resource):
                 response['message'] = 'Email address is already taken.'
                 return response, 409
 
-            get_user_id_query = "CALL get_new_customer_id;"
+            get_user_id_query = "CALL new_customer_uid();"
             NewUserIDresponse = execute(get_user_id_query, 'get', conn)
 
             if NewUserIDresponse['code'] == 490:
@@ -261,7 +256,7 @@ class SignUp(Resource):
             customer_insert_query = """
                                     INSERT INTO customers 
                                     (
-                                        customer_id,
+                                        customer_uid,
                                         customer_created_at,
                                         customer_first_name,
                                         customer_last_name,
@@ -272,8 +267,8 @@ class SignUp(Resource):
                                         customer_city,
                                         customer_state,
                                         customer_zip,
-                                        customer_latitude,
-                                        customer_longitude,
+                                        customer_lat,
+                                        customer_long,
                                         password_salt,
                                         password_hashed,
                                         password_algorithm,
@@ -308,10 +303,7 @@ class SignUp(Resource):
                                         """ + str(refresh_token) + """
                                     );
                                     """
-
             usnInsert = execute(customer_insert_query, 'post', conn)
-
-
             if usnInsert['code'] != 281:
                 string = " Cannot Insert into the customers table. "
                 print("*" * (len(string) + 10))
@@ -334,7 +326,7 @@ class SignUp(Resource):
             result = {
                 'first_name': firstName,
                 'last_name': lastName,
-                'customer_id': NewUserID,
+                'customer_uid': NewUserID,
                 'access_token': access_token,
                 'refresh_token': refresh_token
             }
@@ -345,7 +337,7 @@ class SignUp(Resource):
         except:
             print("Error happened while Sign Up")
             if should_delete:
-                execute("""DELETE FROM customers WHERE customer_id = '""" + NewUserID + """';""", 'post', conn)
+                execute("""DELETE FROM customers WHERE customer_uid = '""" + NewUserID + """';""", 'post', conn)
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
@@ -435,7 +427,7 @@ class Login (Resource):
             refresh_token = request.args.get('token')
             query = """
                     # CUSTOMER QUERY 1: LOGIN
-                    SELECT customer_id,
+                    SELECT customer_uid,
                             customer_last_name,
                             customer_first_name,
                             customer_email, 	
@@ -464,10 +456,10 @@ class Login (Resource):
                 if password is not None and res['result'][0]['user_social_media'] == 'TRUE':
                     response['message'] = "Need to login by Social Media"
                     return response, 401
-                elif password is None and refresh_token is None:
+                elif (password is None and refresh_token is None) or (password is None and res['result'][0]['user_social_media'] == 'FALSE'):
                     return BadRequest("Bad request.")
                 # compare passwords if user_social_media is false
-                elif res['result'][0]['user_social_media'] == 'FALSE':
+                elif (res['result'][0]['user_social_media'] == 'FALSE' or res['result'][0]['user_social_media']=="") and password is not None:
                     salt = res['result'][0]['password_salt']
                     hashed = sha512((password + salt).encode()).hexdigest()
                     if res['result'][0]['password_hashed'] != hashed:
@@ -479,7 +471,7 @@ class Login (Resource):
                 # compare the refresh token because it never expire.
                 elif res['result'][0]['user_social_media'] == 'TRUE':
                     if res['result'][0]['user_refresh_token'] != refresh_token:
-                        response['message'] = "Cannot Authenticated."
+                        response['message'] = "Cannot Authenticated. Token is invalid."
                         return response, 401
                 else:
                     string = " Cannot compare the password or refresh token while log in. "
@@ -828,7 +820,7 @@ class AccountPurchases(Resource):
     def get(self):
         try:
             conn = connect()
-            customer_id = request.args['customer_id']
+            customer_uid = request.args['customer_uid']
             business_id = request.args['business_id']
             query = """
                     # QUERY 4: LATEST PURCHASES WITH SUBSCRIPTION INFO AND LATEST PAYMENTS AND CUSTOMERS
@@ -836,9 +828,9 @@ class AccountPurchases(Resource):
                     SELECT *
                     FROM sf.lpsilp
                     LEFT JOIN sf.customers c
-                        ON lpsilp.pur_customer_id = c.customer_id
+                        ON lpsilp.pur_customer_id = c.customer_uid
                     WHERE pur_business_id = '""" + business_id + """'
-                        AND pur_customer_id = '""" + customer_id + """';
+                        AND pur_customer_id = '""" + customer_uid + """';
                     """
             return simple_get_execute(query, __class__.__name__, conn)
         except:
@@ -933,18 +925,18 @@ class SelectedMeals(Resource):
             conn = connect()
 
             business_id = request.args['business_id']
-            customer_id = request.args['customer_id']
+            customer_uid = request.args['customer_uid']
 
             query = """
                     # QUERY 5: LATEST PURCHASES WITH SUBSCRIPTION INFO AND LATEST PAYMENTS AND CUSTOMERS AND MEAL SELECTIONS 
                     # FOR MEAL SELECTION PAGE AND BUTTON COLORS 
                     SELECT * FROM sf.lpsilp 
                     LEFT JOIN sf.customers c 	
-                        ON lpsilp.pur_customer_id = c.customer_id 
+                        ON lpsilp.pur_customer_id = c.customer_uid 
                     LEFT JOIN sf.latest_combined_meal AS lcm 	
                         ON lpsilp.purchase_id = lcm.sel_purchase_id 
                     WHERE pur_business_id = '""" + business_id + """'
-                        AND pur_customer_id = '""" + customer_id + """';
+                        AND pur_customer_id = '""" + customer_uid + """';
                     """
             query_res = execute(query, 'get', conn)
 
@@ -1043,14 +1035,14 @@ class Coordinates:
 
 
 
-def get_latest_purchases(bussiness_id, customer_id):
+def get_latest_purchases(bussiness_id, customer_uid):
     response = {}
     try:
         conn = connect()
         query = """SELECT *
                             FROM sf.purchases pur
                             LEFT JOIN sf.customers c
-                            ON pur.customer_id = c.customer_id
+                            ON pur.customer_id = c.customer_uid
                             LEFT JOIN latest_payment
                             AS pay
                             ON pur.purchase_id = pay.purchase_id
@@ -1061,7 +1053,7 @@ def get_latest_purchases(bussiness_id, customer_id):
             response['result'] = None
             return response
         for r in res['result']:
-            if r['customer_id'] == customer_id:
+            if r['customer_uid'] == customer_uid:
                 response['message'] = 'Succeeded'
                 response['result'] = r
                 return response
@@ -1079,8 +1071,8 @@ class Latest_purchase_info (Resource):
         try:
             conn = connect()
             business_id = request.args.get('business_id')
-            customer_id = request.args.get('customer_id')
-            res = get_latest_purchases(business_id, customer_id)
+            customer_uid = request.args.get('customer_uid')
+            res = get_latest_purchases(business_id, customer_uid)
             if res['result'] is None:
                 response['message'] = res['message']
                 return response, 500
@@ -1100,7 +1092,7 @@ class Checkout(Resource):
         try:
             conn = connect()
             data = request.get_json(force=True)
-            customer_id = data['customer_id']
+            customer_uid = data['customer_uid']
             business_id = data['business_id']
             delivery_first_name = data['delivery_first_name']
             delivery_last_name = data['delivery_last_name']
@@ -1114,18 +1106,17 @@ class Checkout(Resource):
             delivery_instructions = "'" + data['delivery_instructions'] + "'" if data.get('delivery_instructions') is not None else 'NULL'
             delivery_longitude = data['delivery_longitude']
             delivery_latitude = data['delivery_latitude']
-            items = data['items']
+
+            items = "'[" + "".join(['"' + str(item) + '"' for item in data['items']]) + "]'"
             order_instructions = "'" + data['order_instructions'] + "'" if data.get('order_instructions') is not None else 'NULL'
             purchase_notes = "'" + data['purchase_notes'] + "'" if data.get('purchase_notes') is not None else 'NULL'
             amount_due = data['amount_due']
             amount_discount = data['amount_discount']
             amount_paid = data['amount_paid']
-
             cc_num = data['cc_num']
             cc_exp_date = data['cc_exp_year'] + data['cc_exp_month'] + "01"
             cc_cvv = data['cc_cvv']
             cc_zip = data['cc_zip']
-
             purchaseId = get_new_purchaseID(conn)
             if purchaseId[1] == 500:
                 response['message'] = "Internal Server Error."
@@ -1135,9 +1126,9 @@ class Checkout(Resource):
                 response['message'] = "Internal Server Error."
                 return response, 500
             # User authenticated
-            # check the customer_id and see what kind of registration.
+            # check the customer_uid and see what kind of registration.
             # if it was registered by email then check the password.
-            customer_query = """SELECT * FROM customers WHERE customer_id = '""" + data['customer_id'] + """';"""
+            customer_query = """SELECT * FROM customers WHERE customer_uid = '""" + data['customer_uid'] + """';"""
             customer_res = execute( customer_query, 'get', conn)
 
             if customer_res['code'] != 280 or not customer_res['result']:
@@ -1150,7 +1141,7 @@ class Checkout(Resource):
 
             # Validate credit card
             if str(data['cc_num'][0:12]) == "XXXXXXXXXXXX":
-                latest_purchase = get_latest_purchases(business_id, customer_id)
+                latest_purchase = get_latest_purchases(business_id, customer_uid)
                 if latest_purchase['result'] is None:
                     response['message'] = "Credit card number is invalid."
                     return response, 400
@@ -1220,7 +1211,7 @@ class Checkout(Resource):
                                             purchase_date = \'''' + getToday() + '''\',
                                             purchase_id = \'''' + purchaseId + '''\',
                                             purchase_status = 'ACTIVE',
-                                            pur_customer_id = \'''' + customer_id + '''\',
+                                            pur_customer_id = \'''' + customer_uid + '''\',
                                             pur_business_id = \'''' + business_id + '''\',
                                             delivery_first_name = \'''' + delivery_first_name + '''\',
                                             delivery_last_name = \'''' + delivery_last_name + '''\',
@@ -1234,10 +1225,10 @@ class Checkout(Resource):
                                             delivery_instructions = ''' + delivery_instructions + ''',
                                             delivery_longitude = \'''' + delivery_longitude + '''\',
                                             delivery_latitude = \'''' + delivery_latitude + '''\',
-                                            items = \'''' + items + '''\',
+                                            items = ''' + items + ''',
                                             order_instructions = ''' + order_instructions + ''',
                                             purchase_notes = ''' + purchase_notes + ''';'''
-
+                print(purchase_query)
                 reply['purchase'] = execute(purchase_query, 'post', conn)
                 if reply['purchase']['code'] != 281:
                     print("*************************************")
