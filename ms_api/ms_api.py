@@ -24,12 +24,14 @@ import pytz
 import pymysql
 import requests
 import stripe
-
+import binascii
 stripe_public_key = 'pk_test_6RSoSd9tJgB2fN2hGkEDHCXp00MQdrK3Tw'
 stripe_secret_key = 'sk_test_fe99fW2owhFEGTACgW3qaykd006gHUwj1j'
 stripe.api_key = stripe_secret_key
-
-RDS_HOST = 'pm-mysqldb.cxjnrciilyjq.us-west-1.rds.amazonaws.com'
+# RDS for AWS SQL 5.7
+# RDS_HOST = 'pm-mysqldb.cxjnrciilyjq.us-west-1.rds.amazonaws.com'
+# RDS for AWS SQL 8.0
+RDS_HOST = 'io-mysqldb8.cxjnrciilyjq.us-west-1.rds.amazonaws.com'
 RDS_PORT = 3306
 RDS_USER = 'admin'
 RDS_DB = 'sf'
@@ -75,6 +77,7 @@ def connect():
                                port=RDS_PORT,
                                passwd=RDS_PW,
                                db=RDS_DB,
+                               use_unicode=True,
                                cursorclass=pymysql.cursors.DictCursor)
         print("Successfully connected to RDS. (API v2)")
         return conn
@@ -96,11 +99,14 @@ def disconnect(conn):
 # Serialize JSON
 def serializeResponse(response):
     try:
+        print("here")
         for row in response:
             for key in row:
                 if type(row[key]) is Decimal:
                     row[key] = float(row[key])
-                elif type(row[key]) is date or type(row[key]) is datetime:
+                elif isinstance(row[key], bytes):
+                    row[key] = row[key].decode()
+                elif (type(row[key]) is date or type(row[key]) is datetime) and row[key] is not None:
                     row[key] = row[key].strftime("%Y-%m-%d")
         return response
     except:
@@ -157,8 +163,10 @@ def get_new_purchaseID(conn):
 
 def simple_get_execute(query, name_to_show, conn):
     response = {}
+    print("query: ", query)
     res = execute(query, 'get', conn)
 
+    print (res)
     if res['code'] != 280:
         string = " Cannot run the query for " + name_to_show + ". "
         print("*" * (len(string) + 10))
@@ -172,6 +180,7 @@ def simple_get_execute(query, name_to_show, conn):
     else:
         response['message'] = "Get " + name_to_show + " successful."
         response['result'] = res['result']
+
         return response, 200
 
 class SignUp(Resource):
@@ -652,7 +661,7 @@ class Meals(Resource):
                         LEFT JOIN meals ON menu.menu_meal_id = meals.meal_id
                         WHERE (menu_category = 'WKLY_SPCL_1' OR menu_category = 'WKLY_SPCL_2' OR menu_category = 'WKLY_SPCL_3')
                         AND menu_date = '""" + date['menu_date'] + "';", 'get', conn)
-
+                    print("weekly_special: ", weekly_special)
                     seasonal_special = execute(
                         """
                         SELECT
@@ -672,11 +681,11 @@ class Meals(Resource):
                             meal_sugar,
                             meal_fat,
                             meal_sat
-                        FROM ms.menu
-                        LEFT JOIN ms.meals ON ms.menu.menu_meal_id = ms.meals.meal_id
+                        FROM menu
+                        LEFT JOIN meals ON menu.menu_meal_id = meals.meal_id
                         WHERE (menu_category = 'SEAS_FAVE_1' OR menu_category = 'SEAS_FAVE_2' OR menu_category = 'SEAS_FAVE_3')
                         AND menu_date = '""" + date['menu_date'] + "';", 'get', conn)
-
+                    print("seasonal_special: ", seasonal_special)
                     smoothies = execute(
                         """
                         SELECT
@@ -700,7 +709,7 @@ class Meals(Resource):
                         LEFT JOIN meals ON menu.menu_meal_id = meals.meal_id
                         WHERE (menu_category = 'SMOOTHIE_1' OR menu_category = 'SMOOTHIE_2' OR menu_category = 'SMOOTHIE_3')
                         AND menu_date = '""" + date['menu_date'] + "';", 'get', conn)
-
+                    print("smothies: ", smoothies)
                     addon = execute(
                         """
                         SELECT
@@ -724,6 +733,7 @@ class Meals(Resource):
                         LEFT JOIN meals ON menu.menu_meal_id = meals.meal_id
                         WHERE menu_category LIKE 'ADD_ON_%'
                         AND menu_date = '""" + date['menu_date'] + "';", 'get', conn)
+                    print("addon: ", addon)
                     if weekly_special['code'] != 280 or seasonal_special['code'] != 280 or smoothies['code'] != 280 or addon['code'] != 280:
                         print("*******************************************")
                         print("* Cannot run the query for Meals endpoint *")
@@ -806,7 +816,8 @@ class Plans(Resource):
                     -- WHERE itm_business_id = "200-000007"; 
                     WHERE itm_business_id = \'""" + business_id + """\';
                     """
-            return simple_get_execute(query, __class__.__name__, conn)
+            # return simple_get_execute(query, __class__.__name__, conn)
+            return simple_get_execute(query, "Plans", conn)
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
@@ -964,6 +975,24 @@ class SelectedMeals(Resource):
         finally:
             disconnect(conn)
 
+class Meals_Selection (Resource):
+    def post(self):
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            purchase_id = data['purchase_id']
+            items_selected = data['items']
+
+            if data['is_addon'] == True:
+                # write to addons selected table
+                pass
+            else:
+                # write to meals selected table
+                pass
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
 # Bing API - start
 class Coordinates:
     # array of addresses such as
@@ -2253,6 +2282,7 @@ api.add_resource(Next_Addon_Charge, '/api/v2/next_addon_charge')
 api.add_resource(SelectedMeals, '/api/v2/selectedmeals')
 #  * The "checkout" accepts POST request with appropriate arguments. Please read #
 # the documentation for these arguments and its formats.                         #
+api.add_resource(Meals_Selection, '/api/v2/meals_selection')
 api.add_resource(Checkout, '/api/v2/checkout')
 #--------------------------------------------------------------------------------#
 
