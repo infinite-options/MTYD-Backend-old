@@ -138,7 +138,7 @@ class FlaskTestCases(unittest.TestCase):
             id = response.get_json(force=True)['result']['customer_uid']
             res = execute("DELETE FROM customers WHERE customer_uid= '" + id + "';", 'post', conn)
             if res['code'] != 281:
-                string = " Need to delete a new record in CUSTOMER table manually. "
+                string = " Need to delete a new record in CUSTOMER table manually. customer_uid = '" + id + "'"
                 print("\n")
                 print("*" * (len(string) + 10))
                 print(string.center(len(string) + 10, "*"))
@@ -171,7 +171,7 @@ class FlaskTestCases(unittest.TestCase):
             id = response.get_json(force=True)['result']['customer_uid']
             res = execute("DELETE FROM customers WHERE customer_uid= '" + id + "';", 'post', conn)
             if res['code'] != 281:
-                string = " Need to delete a new record in CUSTOMER table manually. "
+                string = " Need to delete a new record in CUSTOMER table manually. customer_uid = '" + id + "'"
                 print("\n")
                 print("*" * (len(string) + 10))
                 print(string.center(len(string) + 10, "*"))
@@ -219,7 +219,7 @@ class FlaskTestCases(unittest.TestCase):
             payment_id = data['payment_id']
             res = execute("DELETE FROM purchases WHERE purchase_uid= '" + purchase_id + "';", 'post', conn)
             if res['code'] != 281:
-                string = " Need to delete a new record in PURCHASES table manually. "
+                string = " Need to delete a new record in PURCHASES table manually. purchase_uid = '" + purchase_id + "'"
                 print("\n")
                 print("*" * (len(string) + 10))
                 print(string.center(len(string) + 10, "*"))
@@ -227,7 +227,7 @@ class FlaskTestCases(unittest.TestCase):
                 print("\n")
             res = execute("DELETE FROM payments WHERE payment_uid= '" + payment_id + "';", 'post', conn)
             if res['code'] != 281:
-                string = " Need to delete a new record in PAYMENTS table manually. "
+                string = " Need to delete a new record in PAYMENTS table manually. payment_uid = '" + payment_id + "'"
                 print("\n")
                 print("*" * (len(string) + 10))
                 print(string.center(len(string) + 10, "*"))
@@ -251,7 +251,7 @@ class FlaskTestCases(unittest.TestCase):
             selection_uid = data['selection_uid']
             res = execute("DELETE FROM addons_selected WHERE selection_uid= '" + selection_uid + "';", 'post', conn)
             if res['code'] != 281:
-                string = " Need to delete a new record in ADDONS_SELECTED table manually. "
+                string = " Need to delete a new record in ADDONS_SELECTED table manually. Selection_uid = '" + selection_uid + "'"
                 print("\n")
                 print("*" * (len(string) + 10))
                 print(string.center(len(string) + 10, "*"))
@@ -275,7 +275,7 @@ class FlaskTestCases(unittest.TestCase):
             selection_uid = data['selection_uid']
             res = execute("DELETE FROM addons_selected WHERE selection_uid= '" + selection_uid + "';", 'post', conn)
             if res['code'] != 281:
-                string = " Need to delete a new record in MEALS_SELECTED table manually. "
+                string = " Need to delete a new record in MEALS_SELECTED table manually. Selection_uid = '" + selection_uid + "'"
                 print("\n")
                 print("*" * (len(string) + 10))
                 print(string.center(len(string) + 10, "*"))
