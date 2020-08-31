@@ -77,7 +77,7 @@ class FlaskTestCases(unittest.TestCase):
             '/api/v2/plans?business_uid=200-000007',
             '/api/v2/meals',
             '/api/v2/accountpurchases?customer_uid=100-000001&business_uid=200-000001',
-            '/api/v2/selectedmeals?customer_uid=100-000001&business_uid=200-000001',
+            '/api/v2/meals_selected?customer_uid=100-000001&business_uid=200-000001',
             '/api/v2/next_billing_date?business_uid=200-000001',
             '/api/v2/accountsalt?email=quang@gmail.com',
             '/api/v2/next_addon_charge',
@@ -135,7 +135,7 @@ class FlaskTestCases(unittest.TestCase):
         response = tester.post("http://localhost:2000/api/v2/signup", json=payload)
         if response.status_code == 201:
             conn = connect()
-            id = response.get_json(force=True)['customer_uid']
+            id = response.get_json(force=True)['result']['customer_uid']
             res = execute("DELETE FROM customers WHERE customer_uid= '" + id + "';", 'post', conn)
             if res['code'] != 281:
                 string = " Need to delete a new record in CUSTOMER table manually. "
@@ -168,10 +168,114 @@ class FlaskTestCases(unittest.TestCase):
         response = tester.post("http://localhost:2000/api/v2/signup", json=payload)
         if response.status_code == 201:
             conn = connect()
-            id = response.get_json(force=True)['customer_uid']
+            id = response.get_json(force=True)['result']['customer_uid']
             res = execute("DELETE FROM customers WHERE customer_uid= '" + id + "';", 'post', conn)
             if res['code'] != 281:
                 string = " Need to delete a new record in CUSTOMER table manually. "
+                print("\n")
+                print("*" * (len(string) + 10))
+                print(string.center(len(string) + 10, "*"))
+                print("*" * (len(string) + 10))
+                print("\n")
+        self.assertEqual(response.status_code, 201)
+    def test_post_checkout(self):
+        payload = {
+                "customer_uid": "100-000082",
+                "business_id": "200-000001",
+                "items": [{"qty": "5", "name": "Collards (bunch)", "price": "2.5", "item_uid": "310-000022"},
+                          {"qty": "3", "name": "Broccoli (bunch)", "price": "3.5", "item_uid": "310-000023"},
+                          {"qty": "3", "name": "Cauliflower (bunch)", "price": "3.5", "item_uid": "310-000024"},
+                          {"qty": "4", "name": "Iceberg Lettuce (each)", "price": "2.5", "item_uid": "310-000025"}],
+                "salt": "64a7f1fb0df93d8f5b9df14077948afa1b75b4c5028d58326fb801d825c9cd24412f88c8b121c50ad5c62073c75d69f14557255da1a21e24b9183bc584efef71",
+                "delivery_first_name": "Quang",
+                "delivery_last_name": "Dang",
+                "delivery_email": "vinhquangdang1@gmail.com",
+                "delivery_phone": "5105846166",
+                "delivery_address": "1320 144th Ave",
+                "delivery_unit": "",
+                "delivery_city": "San Leandro",
+                "delivery_state": "CA",
+                "delivery_zip": "94578",
+                "delivery_instructions": "Nothing",
+                "delivery_longitude": "0.23243445",
+                "delivery_latitude": "-121.332",
+                "order_instructions": "Nothing",
+                "purchase_notes": "testing",
+                "amount_due": "300.00",
+                "amount_discount": "0.00",
+                "amount_paid": "300.00",
+                "cc_num": "4242424242424242",
+                "cc_exp_year": "2022",
+                "cc_exp_month": "08",
+                "cc_cvv": "123",
+                "cc_zip": "12345"
+        }
+        tester = app.test_client()
+        response = tester.post("http://localhost:2000/api/v2/checkout", json=payload)
+        if response.status_code == 201:
+            conn = connect()
+            data = response.get_json(force=True)
+            purchase_id = data['purchase_id']
+            payment_id = data['payment_id']
+            res = execute("DELETE FROM purchases WHERE purchase_uid= '" + purchase_id + "';", 'post', conn)
+            if res['code'] != 281:
+                string = " Need to delete a new record in PURCHASES table manually. "
+                print("\n")
+                print("*" * (len(string) + 10))
+                print(string.center(len(string) + 10, "*"))
+                print("*" * (len(string) + 10))
+                print("\n")
+            res = execute("DELETE FROM payments WHERE payment_uid= '" + payment_id + "';", 'post', conn)
+            if res['code'] != 281:
+                string = " Need to delete a new record in PAYMENTS table manually. "
+                print("\n")
+                print("*" * (len(string) + 10))
+                print(string.center(len(string) + 10, "*"))
+                print("*" * (len(string) + 10))
+                print("\n")
+        self.assertEqual(response.status_code, 201)
+    def test_post_addon_selection(self):
+        payload = {
+            "is_addon": True,
+            "items": [{"qty": "5", "name": "Collards (bunch)", "price": "2.5", "item_uid": "310-000022"},
+                      {"qty": "6", "name": "Broccoli (bunch)", "price": "3.5", "item_uid": "310-000023"}],
+            "purchase_id": "400-000024",
+            "menu_date": "2020-08-09",
+            "delivery_day": "Sunday"
+        }
+        tester = app.test_client()
+        response = tester.post("http://localhost:2000/api/v2/meals_selection", json=payload)
+        if response.status_code == 201:
+            conn = connect()
+            data = response.get_json(force=True)
+            selection_uid = data['selection_uid']
+            res = execute("DELETE FROM addons_selected WHERE selection_uid= '" + selection_uid + "';", 'post', conn)
+            if res['code'] != 281:
+                string = " Need to delete a new record in ADDONS_SELECTED table manually. "
+                print("\n")
+                print("*" * (len(string) + 10))
+                print(string.center(len(string) + 10, "*"))
+                print("*" * (len(string) + 10))
+                print("\n")
+        self.assertEqual(response.status_code, 201)
+    def test_post_meal_selection(self):
+        payload = {
+            "is_addon": False,
+            "items": [{"qty": "5", "name": "Collards (bunch)", "price": "2.5", "item_uid": "310-000022"},
+                      {"qty": "6", "name": "Broccoli (bunch)", "price": "3.5", "item_uid": "310-000023"}],
+            "purchase_id": "400-000024",
+            "menu_date": "2020-08-09",
+            "delivery_day": "Sunday"
+        }
+        tester = app.test_client()
+        response = tester.post("http://localhost:2000/api/v2/meals_selection", json=payload)
+        if response.status_code == 201:
+            conn = connect()
+            data = response.get_json(force=True)
+            selection_uid = data['selection_uid']
+            res = execute("DELETE FROM addons_selected WHERE selection_uid= '" + selection_uid + "';", 'post', conn)
+            if res['code'] != 281:
+                string = " Need to delete a new record in MEALS_SELECTED table manually. "
                 print("\n")
                 print("*" * (len(string) + 10))
                 print(string.center(len(string) + 10, "*"))

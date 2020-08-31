@@ -317,7 +317,7 @@ class SignUp(Resource):
             response = simple_post_execute(customer_insert_query, ['SIGN_UP'], conn)
             if response[1] != 201:
                 return response
-            response = {
+            response[0]['result'] = {
                 'first_name': firstName,
                 'last_name': lastName,
                 'customer_uid': NewUserID,
@@ -331,7 +331,7 @@ class SignUp(Resource):
                 link = url_for('confirm', token=token, hashed=password, _external=True)
                 msg.body = "Click on the link {} to verify your email address.".format(link)
                 mail.send(msg)
-            return response, 201
+            return response
         except:
             print("Error happened while Sign Up")
             if "NewUserID" in locals():
@@ -843,7 +843,7 @@ class Next_Addon_Charge(Resource):
             disconnect(conn)
 
 
-class SelectedMeals(Resource):
+class Meals_Selected(Resource):
     def get(self):
         response = {}
         try:
@@ -940,12 +940,10 @@ class Meals_Selection (Resource):
                 # write to addons selected table
                 # need a stored function to get the new selection
                 response = simple_post_execute(queries[0], ["ADDONS_SELECTED"], conn)
-                if response[1] == 201:
-                    response[0]['addons_selected'] = selection_uid
             else:
                 response = simple_post_execute(queries[1], ["MEALS_SELECTED"], conn)
-                if response[1] == 201:
-                    response[0]['meals_selected'] = selection_uid
+            if response[1] == 201:
+                response[0]['selection_uid']= selection_uid
             return response
         except:
             if "selection_uid" in locals():
@@ -1207,7 +1205,7 @@ class Checkout(Resource):
                         execute("""DELETE FROM purchases WHERE purchase_uid = '""" + purchaseId + """';""", 'post', conn)
                 return response
             except:
-                response['message'] = "Payment process error."
+                response = {'message': "Payment process error."}
                 return response, 500
         except:
             raise BadRequest('Request failed, please try again later.')
@@ -1515,7 +1513,7 @@ api.add_resource(Next_Addon_Charge, '/api/v2/next_addon_charge')
 #  * The "selectedmeals" only accepts GET request with two required parameters   #
 # "customer_id" and "business_id".It will return the information of all selected #
 # meals and addons which are associated with the specific purchase.              #
-api.add_resource(SelectedMeals, '/api/v2/selectedmeals')
+api.add_resource(Meals_Selected, '/api/v2/meals_selected')
 #  * The "Meals_Selection" accepts POST request with appropriate parameters      #
 #  Please read the documentation for these parameters and its formats.           #
 api.add_resource(Meals_Selection, '/api/v2/meals_selection')
