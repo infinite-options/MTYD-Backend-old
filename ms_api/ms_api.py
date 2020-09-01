@@ -747,16 +747,15 @@ class AccountPurchases(Resource):
         try:
             conn = connect()
             customer_uid = request.args['customer_uid']
-            business_uid = request.args['business_uid']
             query = """
-                    # QUERY 4: LATEST PURCHASES WITH SUBSCRIPTION INFO AND LATEST PAYMENTS AND CUSTOMERS
-                    # FOR ACCOUNT PURCHASES SECTION
-                    SELECT *
-                    FROM sf.lpsilp
+                    # CUSTOMER QUERY 2:  CUSTOMER LATEST PURCHASE AND LATEST PAYMENT HISTORY
+                    # NEED CUSTOMER ADDRESS IN CASE CUSTOMER HAS NOT ORDERED BEFORE
+                    SELECT * FROM sf.latest_purchase pur
                     LEFT JOIN sf.customers c
-                        ON lpsilp.pur_customer_uid = c.customer_uid
-                    WHERE pur_business_uid = '""" + business_uid + """'
-                        AND pur_customer_uid = '""" + customer_uid + """';
+                        ON c.customer_uid = pur.pur_customer_uid
+                    LEFT JOIN sf.latest_payment pay
+                        ON pur.purchase_id = pay.pay_purchase_id
+                    WHERE pur_customer_uid = '""" + customer_uid + """';
                     """
             return simple_get_execute(query, __class__.__name__, conn)
         except:
@@ -1526,7 +1525,7 @@ api.add_resource(Checkout, '/api/v2/checkout')
 #*******************************  ADMIN APIs  ************************************#
 #---------------------------- Create / Edit Menu pages ---------------------------#
 #  * The get_menu endpoint accepts only get request and returns the menu's        #
-#  information. If there is a given param (named "date") in the get request.      #
+#  information. If there is a given param (named "menu_date") in the get request. #
 #  The returned info will associate with that "date" otherwise all information in #
 #  the menu table will be returned.                                               #
 api.add_resource(Get_Menu, '/api/v2/get_menu')
@@ -1537,12 +1536,19 @@ api.add_resource(Get_Menu, '/api/v2/get_menu')
 # it needs.                                                                       #
 api.add_resource(Get_Meals, '/api/v2/get_meals')
 #---------------------------------------------------------------------------------#
+#  * The get_recipes endpoint accepts only get request and return all associate   #
+#   info. This endpoint requires one parameter named "meal_uid".                  #
 api.add_resource(Get_Recipes, '/api/v2/get_recipes')
+#  * The get_new_ingredients endpoint accepts only get request and return all     #
+#  associate info. This endpoint does not require any parameter.                  #
 api.add_resource(Get_New_Ingredient, '/api/v2/get_new_ingredients')
+#  * The get_ingredients_to_purchase accepts only get request and return all
+#  associate info. This endpoint requires one parameter named "business_uid".     #
 api.add_resource(Get_Ingredients_To_Purchase, '/api/v2/get_ingredients_to_purchase')
+
 #-------------------------------- Plan / Coupon pages ----------------------------#
 #  * The user can access /api/v2/plans endpoint to get all Plans.                 #
-#  * The Get_coupon endpoint accepts only GET request with a required argument    #
+#  * The get_coupon endpoint accepts only GET request with a required argument    #
 #  ("business_uid"). This endpoint will returns all active coupons in the COUPON   #
 #  table.                                                                         #
 api.add_resource(Get_Coupon, '/api/v2/get_coupons')
