@@ -76,7 +76,7 @@ class FlaskTestCases(unittest.TestCase):
         endpoints = [
             '/api/v2/plans?business_uid=200-000007',
             '/api/v2/meals',
-            '/api/v2/accountpurchases?customer_uid=100-000001,
+            '/api/v2/accountpurchases?customer_uid=100-000001,'
             '/api/v2/meals_selected?customer_uid=100-000001&business_uid=200-000001',
             '/api/v2/next_billing_date?business_uid=200-000001',
             '/api/v2/accountsalt?email=quang@gmail.com',
