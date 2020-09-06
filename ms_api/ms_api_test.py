@@ -74,13 +74,10 @@ def execute(sql, cmd, conn, skipSerialization=False):
 class FlaskTestCases(unittest.TestCase):
     def test_get_client(self):
         endpoints = [
-            '/api/v2/plans?business_uid=200-000007',
-            '/api/v2/meals',
-            '/api/v2/accountpurchases?customer_uid=100-000001,'
-            '/api/v2/meals_selected?customer_uid=100-000001&business_uid=200-000001',
-            '/api/v2/next_billing_date?business_uid=200-000001',
-            '/api/v2/accountsalt?email=quang@gmail.com',
-            '/api/v2/next_addon_charge',
+            '/api/v2/meals_selected?customer_uid=100-000001',
+            '/api/v2/upcoming_menu',
+            '/api/v2/customer_lplp?customer_uid=100-000001',
+            '/api/v2/next_addon_charge?purchase_uid=400-000001',
         ]
         for e in endpoints:
             with self.subTest(name=e):
@@ -105,6 +102,7 @@ class FlaskTestCases(unittest.TestCase):
                 tester = app.test_client()
                 response = tester.get(e)
                 self.assertEqual(response.status_code, 200)
+
     def test_login(self):
         payload = {
             "email": "quang@gmail.com",
@@ -113,6 +111,7 @@ class FlaskTestCases(unittest.TestCase):
         tester = app.test_client()
         response = tester.post('http://localhost:2000/api/v2/login', json=payload)
         self.assertEqual(response.status_code, 200)
+
     def test_post_signup_by_email(self):
         payload = {
                 "email": "quangdang0587@gmail.com",
@@ -147,7 +146,7 @@ class FlaskTestCases(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
     def test_post_signup_by_social(self):
         payload = {
-            "email":"quangdang@gmail.com",
+            "email": "quangdang@gmail.com",
             "access_token": "this is a access_token",
             "refresh_token": "this is a secret refresh_token",
             "first_name": "Quang",
@@ -234,6 +233,7 @@ class FlaskTestCases(unittest.TestCase):
                 print("*" * (len(string) + 10))
                 print("\n")
         self.assertEqual(response.status_code, 201)
+
     def test_post_addon_selection(self):
         payload = {
             "is_addon": True,
@@ -258,6 +258,7 @@ class FlaskTestCases(unittest.TestCase):
                 print("*" * (len(string) + 10))
                 print("\n")
         self.assertEqual(response.status_code, 201)
+
     def test_post_meal_selection(self):
         payload = {
             "is_addon": False,

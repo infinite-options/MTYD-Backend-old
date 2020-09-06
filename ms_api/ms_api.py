@@ -159,12 +159,22 @@ def get_new_purchaseID(conn):
     if newPurchaseQuery['code'] == 280:
         return newPurchaseQuery['result'][0]['new_id']
     return "Could not generate new purchase ID", 500
+def get_new_id(query, name, conn):
+    response = {}
+    new_id = execute(query, 'get', conn)
+    if new_id['code'] != 280:
+        response['message'] = 'Could not generate ' + name + "."
+        return response, 500
+    response['message'] = "OK"
+    response['result'] = new_id['result'][0]['new_id']
+    return response, 200
 
 def simple_get_execute(query, name_to_show, conn):
     response = {}
     res = execute(query, 'get', conn)
     if res['code'] != 280:
-        query_number = "    " + re.search(r'#(.*?):', query).group(1) + "     "
+        search = re.search(r'#(.*?):', query)
+        query_number = "    " + search.group(1) + "     " if search is not None else "UNKNOWN QUERY NUMBER"
         string = " Cannot run the query for " + name_to_show + "."
         print("\n")
         print("*" * (len(string) + 10))
@@ -195,7 +205,7 @@ def simple_post_execute(queries, names, conn):
             print("*" * (len(string) + 10))
             response['message'] = "Internal Server Error."
             return response, 500
-    response['message'] = "Post successful."
+    response['message'] = "Successful."
     return response, 201
 
 class SignUp(Resource):
@@ -435,6 +445,108 @@ class Login (Resource):
         finally:
             disconnect(conn)
 
+class Meals_Selected(Resource):
+    def get(self):
+        try:
+            conn = connect()
+            customer_uid = request.args['customer_uid']
+            query = """
+                    # CUSTOMER QUERY 3: ALL MEAL SELECTIONS BY CUSTOMER  (INCLUDES HISTORY)
+                    SELECT * FROM sf.latest_combined_meal lcm
+                    LEFT JOIN sf.lplp
+                        ON lcm.sel_purchase_id = lplp.purchase_id
+                    WHERE pur_customer_uid = '""" + customer_uid + """';
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+class Get_Upcoming_Menu(Resource):
+    def get(self):
+        try:
+            conn = connect()
+            query = """
+                    # CUSTOMER QUERY 4: UPCOMING MENUS
+                    SELECT * FROM sf.menu
+                    LEFT JOIN sf.meals m
+                        ON menu.menu_meal_id = m.meal_uid
+                    WHERE menu_date > CURDATE();
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+class Get_Latest_Purchases_Payments(Resource):
+    # HTTP method GET
+    def get(self):
+        try:
+            conn = connect()
+            customer_uid = request.args['customer_uid']
+            query = """
+                    # CUSTOMER QUERY 5: NEXT SUBSCRIPTION BILLING DATE (WITH TRUE_SKIPS)
+                    SELECT *,
+                        IF (nbd.true_skips > 0,
+                        ADDDATE(nbd.start_delivery_date, (nbd.num_issues + nbd.true_skips) * 7 / nbd.deliveries_per_week - 3),
+                        ADDDATE(nbd.start_delivery_date, (nbd.num_issues +        0      ) * 7 / nbd.deliveries_per_week - 3) ) AS next_billing_date
+                    FROM (
+                        SELECT lplpibr.*,
+                            si.*,
+                            ts.true_skips
+                        FROM sf.lplp_items_by_row AS lplpibr
+                        LEFT JOIN sf.subscription_items si
+                            ON lplpibr.lplpibr_jt_item_uid = si.item_uid
+                        LEFT JOIN sf.true_skips AS ts
+                            ON lplpibr.lplpibr_purchase_id = ts.d_purchase_id) AS nbd
+                    WHERE lplpibr_customer_uid = '""" + customer_uid + """';
+                    """
+            response = simple_get_execute(query, __class__.__name__, conn)
+            if response[1] != 200:
+                return response
+            except_list = ['password_hashed', 'password_salt', 'password_algorithm']
+            for i in range(len(response[0]['result'])):
+                for key in except_list:
+                     if response[0]['result'][i].get(key) is not None:
+                        del response[0]['result'][i][key]
+            return response
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+class Next_Addon_Charge(Resource):
+    def get(self):
+        try:
+            conn = connect()
+            purchase_uid = request.args['purchase_uid']
+            query = """
+                        # CUSTOMER QUERY 6: NEXT ADDONS BILLING DATE AND AMOUNT
+                        SELECT *,
+                            MIN(sel_menu_date)
+                        FROM (
+                                SELECT *,
+                                        SUM(addon_charge)
+                                FROM (
+                                    SELECT *,
+                                        jt_qty * jt_price AS addon_charge
+                                    FROM sf.selected_addons_by_row
+                                    WHERE sel_menu_date >= ADDDATE(CURDATE(), -28) ) 
+                                    AS meal_aoc
+                                GROUP BY selection_uid
+                                ORDER BY sel_purchase_id, sel_menu_date ASC) 
+                            AS sum_aoc
+                        WHERE sel_purchase_id = '""" + purchase_uid + """'
+                        GROUP BY sel_purchase_id;
+                        """
+            return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
 class AccountSalt(Resource):
     def get(self):
         try:
@@ -452,602 +564,7 @@ class AccountSalt(Resource):
         finally:
             disconnect(conn)
 
-class Meals(Resource):
-    global RDS_PW
 
-    # Format queried tuples into JSON
-    def jsonifyMeals(self, query, mealKeys):
-        json = {}
-        for key in [('Weekly', 'WEEKLY SPECIALS'), ('Seasonal', 'SEASONAL FAVORITES'), ('Smoothies', 'SMOOTHIES')]:
-            json[key[0]] = {'Category': key[1], 'Menu': []}
-        decimalKeys = ['extra_meal_price', 'meal_calories', 'meal_protein',
-                       'meal_carbs', 'meal_fiber', 'meal_sugar', 'meal_fat', 'meal_sat']
-        indexOfMealId = mealKeys.index('menu_meal_id')
-        for row in query:
-            if row[indexOfMealId] is None:
-                continue
-            rowDict = {}
-            for element in enumerate(row):
-                key = mealKeys[element[0]]
-                value = element[1]
-                # Convert all decimal values in row to floats
-                if key in decimalKeys:
-                    value = float(value)
-                if key == 'menu_date':
-                    value = value.strftime("%Y-%m-%d")
-                rowDict[key] = value
-            # Hardcode quantity to 0
-            # Will need to fetch from db eventually
-            rowDict['quantity'] = 0
-            #           rowDict['meal_photo_url'] = 'https://prep-to-your-door-s3.s3.us-west-1.amazonaws.com/dev_imgs/700-000014.png'
-            if 'SEAS_FAVE' in rowDict['menu_category']:
-                json['Seasonal']['Menu'].append(rowDict)
-            elif 'WKLY_SPCL' in rowDict['menu_category']:
-                json['Weekly']['Menu'].append(rowDict)
-            elif rowDict['menu_category'] in ['ALMOND_BUTTER', 'THE_ENERGIZER', 'SEASONAL_SMOOTHIE', 'THE_ORIGINAL']:
-                json['Smoothies']['Menu'].append(rowDict)
-        return json
-
-    def jsonifyAddons(self, query, mealKeys):
-        json = {}
-        for key in [('Addons', 'ADD-ON'), ('Weekly', 'ADD MORE MEALS'), ('Smoothies', 'ADD MORE SMOOTHIES')]:
-            json[key[0]] = {'Category': key[1], 'Menu': []}
-        decimalKeys = ['extra_meal_price', 'meal_calories', 'meal_protein',
-                       'meal_carbs', 'meal_fiber', 'meal_sugar', 'meal_fat', 'meal_sat']
-        indexOfMealId = mealKeys.index('menu_meal_id')
-        for row in query:
-            if row[indexOfMealId] is None:
-                continue
-            rowDict = {}
-            for element in enumerate(row):
-                key = mealKeys[element[0]]
-                value = element[1]
-                # Convert all decimal values in row to floats
-                if key in decimalKeys:
-                    value = float(value)
-                if key == 'menu_date':
-                    value = value.strftime("%Y-%m-%d")
-                rowDict[key] = value
-            # Hardcode quantity to 0
-            # Will need to fetch from db eventually
-            rowDict['quantity'] = 0
-            # rowDict['meal_photo_url'] = 'https://prep-to-your-door-s3.s3.us-west-1.amazonaws.com/dev_imgs/700-000014.png'
-            if rowDict['menu_category'] in ['ALMOND_BUTTER', 'THE_ENERGIZER', 'SEASONAL_SMOOTHIE', 'THE_ORIGINAL']:
-                json['Smoothies']['Menu'].append(rowDict)
-            elif 'SEAS_FAVE' in rowDict['menu_category']:
-                json['Weekly']['Menu'].append(rowDict)
-            elif 'WKLY_SPCL' in rowDict['menu_category']:
-                json['Weekly']['Menu'].append(rowDict)
-            else:
-                json['Addons']['Menu'].append(rowDict)
-        return json
-    def getMealQuantities(self, menu):
-        mealQuantities = {}
-        for key in ['Meals', 'Addons']:
-            for subMenu in menu[key]:
-                for eachMeal in menu[key][subMenu]['Menu']:
-                    meal_id = eachMeal['meal_uid']
-                    mealQuantities[meal_id] = 0
-        return mealQuantities
-    def getAddonPrice(self, menu):
-        savedAddonPrice = {}
-        for key in ['Meals', 'Addons']:
-            for subMenu in menu[key]:
-                for eachMeal in menu[key][subMenu]['Menu']:
-                    related_price = eachMeal['meal_price']
-                    meal_id = eachMeal['meal_uid']
-                    savedAddonPrice[meal_id] = related_price
-        return savedAddonPrice
-
-    # HTTP method GET
-    # Optional parameter: startDate (YYYYMMDD)
-    def get(self, startDate=None):
-        response = {}
-        items = {}
-        try:
-            if startDate:
-                now = datetime.strptime(startDate, "%Y%m%d")
-            else:
-                now = datetime.now()
-        except:
-            raise BadRequest('Request failed, bad startDate parameter.')
-
-        try:
-            conn = connect()
-
-            dates = execute(
-                "SELECT DISTINCT menu_date FROM menu;", 'get', conn)
-            i = 1
-            for date in dates['result']:
-                # only grab 6 weeks worth of menus
-                if i == 7:
-                    break
-                # convert string to datetime
-                stamp = datetime.strptime(date['menu_date'], '%Y-%m-%d')
-
-                # Roll calendar at 4PM Monday
-                if now - timedelta(days=1, hours=16) < stamp:
-                    weekly_special = execute(
-                        """
-                        SELECT
-                            meal_uid,
-                            meal_name,
-                            menu_date,
-                            menu_category,
-                            menu_meal_id,
-                            meal_desc,
-                            meal_category,
-                            meal_photo_url,
-                            meal_price,
-                            meal_calories,
-                            meal_protein,
-                            meal_carbs,
-                            meal_fiber,
-                            meal_sugar,
-                            meal_fat,
-                            meal_sat
-                        FROM menu
-                        LEFT JOIN meals ON menu.menu_meal_id = meals.meal_uid
-                        WHERE (menu_category = 'WKLY_SPCL_1' OR menu_category = 'WKLY_SPCL_2' OR menu_category = 'WKLY_SPCL_3')
-                        AND menu_date = '""" + date['menu_date'] + "';", 'get', conn)
-                    seasonal_special = execute(
-                        """
-                        SELECT
-                            meal_uid,
-                            meal_name,
-                            menu_date,
-                            menu_category,
-                            menu_meal_id,
-                            meal_desc,
-                            meal_category,
-                            meal_photo_url,
-                            meal_price,
-                            meal_calories,
-                            meal_protein,
-                            meal_carbs,
-                            meal_fiber,
-                            meal_sugar,
-                            meal_fat,
-                            meal_sat
-                        FROM menu
-                        LEFT JOIN meals ON menu.menu_meal_id = meals.meal_uid
-                        WHERE (menu_category = 'SEAS_FAVE_1' OR menu_category = 'SEAS_FAVE_2' OR menu_category = 'SEAS_FAVE_3')
-                        AND menu_date = '""" + date['menu_date'] + "';", 'get', conn)
-                    smoothies = execute(
-                        """
-                        SELECT
-                            meal_uid,
-                            meal_name,
-                            menu_date,
-                            menu_category,
-                            menu_meal_id,
-                            meal_desc,
-                            meal_category,
-                            meal_photo_url,
-                            meal_price,
-                            meal_calories,
-                            meal_protein,
-                            meal_carbs,
-                            meal_fiber,
-                            meal_sugar,
-                            meal_fat,
-                            meal_sat
-                        FROM menu
-                        LEFT JOIN meals ON menu.menu_meal_id = meals.meal_uid
-                        WHERE (menu_category = 'SMOOTHIE_1' OR menu_category = 'SMOOTHIE_2' OR menu_category = 'SMOOTHIE_3')
-                        AND menu_date = '""" + date['menu_date'] + "';", 'get', conn)
-                    addon = execute(
-                        """
-                        SELECT
-                            meal_uid,
-                            meal_name,
-                            menu_date,
-                            menu_category,
-                            menu_meal_id,
-                            meal_desc,
-                            meal_category,
-                            meal_photo_url,
-                            meal_price,
-                            meal_calories,
-                            meal_protein,
-                            meal_carbs,
-                            meal_fiber,
-                            meal_sugar,
-                            meal_fat,
-                            meal_sat
-                        FROM menu
-                        LEFT JOIN meals ON menu.menu_meal_id = meals.meal_uid
-                        WHERE menu_category LIKE 'ADD_ON_%'
-                        AND menu_date = '""" + date['menu_date'] + "';", 'get', conn)
-                    for res in ["weekly_special", "seasonal_special", "smoothies", "addon"]:
-                        if locals()[res]['code'] != 280:
-                            string = " Cannot run the query for \"" + res + "\" in Meals endpoint. "
-                            print("*" * (len(string) + 10))
-                            print(string.center(len(string) + 10, "*"))
-                            print("*" * (len(string) + 10))
-                            response['message'] = 'Internal Server Error.'
-                            return response, 500
-                    thursday = stamp - timedelta(days=2)
-                    today = datetime.now()
-                    if today < thursday:
-                        # stamp = stamp + timedelta(days=7)
-                        weekly_special['result'] = [] if not weekly_special['result'] else weekly_special['result']
-                        seasonal_special['result'] = [] if not seasonal_special['result'] else seasonal_special['result']
-                        week = {
-                            'SaturdayDate': str(stamp.date()),
-                            'SundayDate': str((stamp + timedelta(days=1)).date()),
-                            'Sunday': str((stamp + timedelta(days=1)).date().strftime('%b %-d')),
-                            'Monday': str((stamp + timedelta(days=2)).date().strftime('%b %-d')),
-                            'Meals': {
-                                'Weekly': {
-                                    'Category': "WEEKLY SPECIALS",
-                                    'Menu': weekly_special['result']
-                                },
-                                'Seasonal': {
-                                    'Category': "SEASONAL FAVORITES",
-                                    'Menu': seasonal_special['result']
-                                },
-                                'Smoothies': {
-                                    'Category': "SMOOTHIES",
-                                    'Menu': smoothies['result']
-                                }
-                            },
-                            'Addons': {
-                                'Addons': {
-                                    'Category': "ADD ONS",
-                                    'Menu': addon['result']
-                                },
-                                'Weekly': {
-                                    'Category': "ADD MORE MEALS",
-                                    'Menu': weekly_special['result'] + seasonal_special['result']
-                                },
-                                'Smoothies': {
-                                    'Category': "ADD MORE SMOOTHIES",
-                                    'Menu': smoothies['result']
-                                }
-                            }
-                        }
-                        week['MealQuantities'] = self.getMealQuantities(week)
-                        week['AddonPrice'] = self.getAddonPrice(week)
-                        index = 'MenuForWeek' + str(i)
-                        items[index] = week
-
-                        i += 1
-            # Finish Line
-
-            response['message'] = 'Request successful.'
-            response['result'] = items
-            return response, 200
-        except:
-            raise BadRequest('Request failed, please try again later.')
-        finally:
-            disconnect(conn)
-
-class Plans(Resource):
-    # HTTP method GET
-    def get(self):
-        try:
-            conn = connect()
-            business_uid = request.args['business_uid']
-            query = """
-                    # ADMIN QUERY 5: PLANS 
-                    SELECT * FROM sf.subscription_items si 
-                    -- WHERE itm_business_uid = "200-000007"; 
-                    WHERE itm_business_uid = \'""" + business_uid + """\';
-                    """
-            return simple_get_execute(query, __class__.__name__, conn)
-        except:
-            raise BadRequest('Request failed, please try again later.')
-        finally:
-            disconnect(conn)
-
-class AccountPurchases(Resource):
-    # HTTP method GET
-    def get(self):
-        try:
-            conn = connect()
-            customer_uid = request.args['customer_uid']
-            query = """
-                    # CUSTOMER QUERY 2:  CUSTOMER LATEST PURCHASE AND LATEST PAYMENT HISTORY
-                    # NEED CUSTOMER ADDRESS IN CASE CUSTOMER HAS NOT ORDERED BEFORE
-                    SELECT * FROM sf.latest_purchase pur
-                    LEFT JOIN sf.customers c
-                        ON c.customer_uid = pur.pur_customer_uid
-                    LEFT JOIN sf.latest_payment pay
-                        ON pur.purchase_id = pay.pay_purchase_id
-                    WHERE pur_customer_uid = '""" + customer_uid + """';
-                    """
-            return simple_get_execute(query, __class__.__name__, conn)
-        except:
-            raise BadRequest('Request failed, please try again later.')
-        finally:
-            disconnect(conn)
-class Next_Billing_Date(Resource):
-    def get(self):
-        try:
-            conn = connect()
-            business_uid = request.args['business_uid']
-            query = """
-                    # QUERY 9: NEXT BILLING DATE  NUMBER OF DELIVERIES  NUMBER OF SKIPS
-                    SELECT 
-                        purchase_id,
-                        start_delivery_date,
-                        num_issues,
-                        payment_day,
-                        item_price,
-                        shipping,
-                    --  menu_date,
-                    -- 	combined_selection
-                        sum(IF (combined_selection != "" OR combined_selection IS NULL,1,0)) AS weeks,
-                        sum(IF (combined_selection != "SKIP" OR combined_selection IS NULL,1,0)) AS delivered,
-                        sum(IF (combined_selection = "SKIP",1,0)) AS skip_amount,
-                        num_issues - sum(if (combined_selection != "SKIP" OR combined_selection IS NULL,1,0)) AS remaining,
-                        ADDDATE(start_delivery_date, payment_day-3) AS BillingDate,
-                        ADDDATE(start_delivery_date, payment_day-3+sum(IF (combined_selection = "SKIP",1,0))*payment_day/num_issues) AS NextBillingDate
-                    FROM (
-                        SELECT *
-                        FROM sf.lpsilp, (SELECT DISTINCT menu_date FROM sf.menu) AS md)
-                        AS lpsilpmd
-                    LEFT JOIN sf.latest_combined_meal lcm
-                        ON lpsilpmd.menu_date = lcm.sel_menu_date AND
-                            lpsilpmd.purchase_id = lcm.sel_purchase_id
-                    WHERE pur_business_uid = '""" + business_uid + """'
-                        AND menu_date >= start_delivery_date
-                        AND menu_date <= CURDATE()
-                    GROUP BY purchase_id;
-                    """
-            return simple_get_execute(query, __class__.__name__, conn)
-        except:
-            raise BadRequest('Request failed, please try again later.')
-        finally:
-            disconnect(conn)
-
-class Next_Addon_Charge(Resource):
-    def get(self):
-        try:
-            conn = connect()
-            query = """
-                        SELECT sel_purchase_id,
-                            SUM(addon_charge) as total_addon_charge,
-                            addon_charge_date
-                        FROM (
-                        SELECT aos.*, jt.*,
-                            jt_qty * jt_price AS addon_charge,
-                            ADDDATE(last_sel_menu_date, -3) as addon_charge_date
-                        -- FROM sf.purchases AS pur,
-                        FROM (# STEP 2
-                            SELECT sel_purchase_id,
-                                MIN(last_menu_date) as last_sel_menu_date,
-                                addon_selection
-                            FROM sf.latest_combined_meal
-                            WHERE SEL_MENU_DATE >= ADDDATE(CURDATE(), -28)  -- replace 0 with -28 to enable testing
-                                AND json_length(addon_selection) != 0
-                            GROUP BY sel_purchase_id) 
-                            AS aos,
-                        JSON_TABLE (aos.addon_selection, '$[*]' 
-                            COLUMNS (
-                                    jt_id FOR ORDINALITY,
-                                    jt_item_uid VARCHAR(255) PATH '$.item_uid',
-                                    jt_name VARCHAR(255) PATH '$.name',
-                                    jt_qty INT PATH '$.qty',
-                                    jt_price DOUBLE PATH '$.price')
-                                ) AS jt)
-                            AS aosjt
-                        GROUP BY sel_purchase_id;
-                        """
-            return simple_get_execute(query, __class__.__name__, conn)
-        except:
-            raise BadRequest('Request failed, please try again later.')
-        finally:
-            disconnect(conn)
-
-
-class Meals_Selected(Resource):
-    def get(self):
-        response = {}
-        try:
-            conn = connect()
-            business_uid = request.args['business_uid']
-            customer_uid = request.args['customer_uid']
-            query = """
-                    # QUERY 5: LATEST PURCHASES WITH SUBSCRIPTION INFO AND LATEST PAYMENTS AND CUSTOMERS AND MEAL SELECTIONS
-                    # FOR MEAL SELECTION PAGE AND BUTTON COLORS
-                    SELECT *
-                    FROM sf.lpsilp
-                    LEFT JOIN sf.customers c
-                        ON lpsilp.pur_customer_uid = c.customer_uid
-                    LEFT JOIN sf.latest_combined_meal AS lcm
-                        ON lpsilp.purchase_id = lcm.sel_purchase_id
-                    WHERE pur_business_uid = '""" + business_uid + """'
-                        AND pur_customer_uid = '""" + customer_uid + """';
-                    """
-            query_res = simple_get_execute(query, __class__.__name__, conn)
-            if query_res[1] == 500:
-                response['message'] = "Internal Server Error"
-                return response, 500
-            elif query_res[1] == 404:
-                response['message'] = "Not Found."
-                return response, 404
-            result = {}
-            query_res = query_res[0]
-            for purchase in query_res['result']:
-                if purchase['purchase_id'] not in result:
-                    result[purchase['purchase_id']] = {}
-
-                if purchase['sel_menu_date'] not in result[purchase['purchase_id']]:
-                    result[purchase['purchase_id']][purchase['sel_menu_date']] = {}
-
-                result[purchase['purchase_id']][purchase['sel_menu_date']] = {
-                    'meals_selected' : purchase['meal_selection'],
-                    'addons_selected': purchase['addon_selection'],
-                    'delivery_day': purchase['delivery_day']
-                }
-            response['message'] = "Successful."
-            response['result'] = result
-            return response, 200
-        except:
-            raise BadRequest('Request failed, please try again later.')
-        finally:
-            disconnect(conn)
-
-class Meals_Selection (Resource):
-    def post(self):
-        response = {}
-        try:
-            conn = connect()
-            data = request.get_json(force=True)
-            purchase_id = data['purchase_id']
-            items_selected = "'[" + ", ".join([str(item).replace("'", "\"") for item in data['items']]) + "]'"
-            delivery_day = data['delivery_day']
-            sel_menu_date = data['menu_date']
-
-            if data['is_addon']:
-                res = execute("CALL new_addons_selected_uid();", 'get', conn)
-            else:
-                res = execute("CALL new_meals_selected_uid();", 'get', conn)
-            if res['code'] != 280:
-                print("*******************************************")
-                print("* Cannot run the query to get a new \"selection_uid\" *")
-                print("*******************************************")
-                response['message'] = 'Internal Server Error.'
-                return response, 500
-            selection_uid = res['result'][0]['new_id']
-            queries = [[
-                        """
-                        INSERT INTO addons_selected
-                        SET selection_uid = '""" + selection_uid + """',
-                            sel_purchase_id = '""" + purchase_id + """',
-                            selection_time = '""" + getNow() + """',
-                            sel_menu_date = '""" + sel_menu_date + """',
-                            meal_selection = """ + items_selected + """,
-                            delivery_day = '""" + delivery_day + """';
-                        """
-                        ],
-                       [
-                       """
-                       INSERT INTO meals_selected
-                       SET selection_uid = '""" + selection_uid + """',
-                        sel_purchase_id = '""" + purchase_id + """',
-                        selection_time = '""" + getNow() + """',
-                        sel_menu_date = '""" + sel_menu_date + """',
-                        meal_selection = """ + items_selected + """,
-                        delivery_day = '""" + delivery_day + """';
-                        """
-                       ]]
-
-            if data['is_addon'] == True:
-                # write to addons selected table
-                # need a stored function to get the new selection
-                response = simple_post_execute(queries[0], ["ADDONS_SELECTED"], conn)
-            else:
-                response = simple_post_execute(queries[1], ["MEALS_SELECTED"], conn)
-            if response[1] == 201:
-                response[0]['selection_uid']= selection_uid
-            return response
-        except:
-            if "selection_uid" in locals():
-                execute("DELETE FROM addons_selected WHERE selection_uid = '" + selection_uid + "';", 'post', conn)
-                execute("DELETE FROM meals_selected WHERE selection_uid = '" + selection_uid + "';", 'post', conn)
-            raise BadRequest("Request failed, please try again later.")
-        finally:
-            disconnect(conn)
-# Bing API - start
-class Coordinates:
-    # array of addresses such as
-    # ['Dunning Ln, Austin, TX 78746', '12916 Cardinal Flower Drive, Austin, TX 78739', '51 Rainey St., austin, TX 78701']
-    def __init__(self, locations):
-        self.locations = locations
-
-    # returns an address formatted to be used for the Bing API to get locations
-    def formatAddress(self, address):
-        output = address.replace(" ", "%20")
-        if "." in output:
-            output = output.replace(".", "")
-        return output
-
-    def calculateFromLocations(self):
-        global BING_API_KEY
-
-        params = {
-            'key': BING_API_KEY
-        }
-        coordinates = []
-        for address in self.locations:
-            formattedAddress = self.formatAddress(address)
-            print("address: ", address)
-            r = requests.get('http://dev.virtualearth.net/REST/v1/Locations/{}'.format(formattedAddress),
-                             '&maxResults=1&key={}'.format(params['key']))
-            print("result:", r)
-            try:
-                results = r.json()
-                assert (results['resourceSets'][0]['estimatedTotal'])
-                point = results['resourceSets'][0]['resources'][0]['geocodePoints'][0]['coordinates']
-                lat, lng = point[0], point[1]
-            except:
-                lat, lng = None, None
-
-            # appends a dictionary of latitude and longitude points for the given address
-            coordinates.append({
-                "latitude": lat,
-                "longitude": lng
-            })
-        # prints lat, long points for each address
-        for i in coordinates:
-            print(i, "\n")
-            print(type(["latitude"]))
-
-        # return array of dictionaries containing lat, long points
-        return coordinates
-
-def get_latest_purchases(bussiness_id, customer_uid):
-    response = {}
-    try:
-        conn = connect()
-        query = """SELECT *
-                            FROM sf.purchases pur
-                            LEFT JOIN sf.customers c
-                            ON pur.customer_id = c.customer_uid
-                            LEFT JOIN latest_payment
-                            AS pay
-                            ON pur.purchase_id = pay.purchase_id
-                            WHERE business_id = '""" + bussiness_id + """';"""
-        res = execute(query, 'get', conn)
-        if res['code'] != 280:
-            response['message'] = res['message']
-            response['result'] = None
-            return response
-        for r in res['result']:
-            if r['customer_uid'] == customer_uid:
-                response['message'] = 'Succeeded'
-                response['result'] = r
-                return response
-        response['message'] = 'Not found'
-        response['result'] = None
-        return response
-    except:
-        raise BadRequest('Request failed, please try again later.')
-    finally:
-        disconnect(conn)
-
-class Latest_purchase_info (Resource):
-    def get(self):
-        response = {}
-        try:
-            conn = connect()
-            business_id = request.args.get('business_id')
-            customer_uid = request.args.get('customer_uid')
-            res = get_latest_purchases(business_id, customer_uid)
-            if res['result'] is None:
-                response['message'] = res['message']
-                return response, 500
-            res['result']['cc_num'] = "XXXXXXXXXXXX" + str(res['result']['cc_num'][:-4])
-            response['message'] = "Successful."
-            response['result'] = res
-            return response, 200
-        except:
-            raise BadRequest('Request failed, please try again later.')
-        finally:
-            disconnect(conn)
 
 class Checkout(Resource):
     def post(self):
@@ -1099,7 +616,7 @@ class Checkout(Resource):
             # check the customer_uid and see what kind of registration.
             # if it was registered by email then check the password.
             customer_query = """SELECT * FROM customers WHERE customer_uid = '""" + data['customer_uid'] + """';"""
-            customer_res = execute( customer_query, 'get', conn)
+            customer_res = execute(customer_query, 'get', conn)
 
             if customer_res['code'] != 280 or not customer_res['result']:
                 response['message'] = "Could not authenticate user"
@@ -1110,15 +627,15 @@ class Checkout(Resource):
                     return response, 401
 
             # Validate credit card
-            if str(data['cc_num'][0:12]) == "XXXXXXXXXXXX":
-                latest_purchase = get_latest_purchases(business_id, customer_uid)
-                if latest_purchase['result'] is None:
-                    response['message'] = "Credit card number is invalid."
-                    return response, 400
-                if str(latest_purchase['result']['cc_num'][:-4]) != str(data['cc_num'][:-4]):
-                    response['message'] = "Credit card number is invalid."
-                    return response, 400
-                cc_num = latest_purchase['result']['cc_num']
+            # if str(data['cc_num'][0:12]) == "XXXXXXXXXXXX":
+            #     latest_purchase = get_latest_purchases(business_id, customer_uid)
+            #     if latest_purchase['result'] is None:
+            #         response['message'] = "Credit card number is invalid."
+            #         return response, 400
+            #     if str(latest_purchase['result']['cc_num'][:-4]) != str(data['cc_num'][:-4]):
+            #         response['message'] = "Credit card number is invalid."
+            #         return response, 400
+            #     cc_num = latest_purchase['result']['cc_num']
 
             # create a stripe charge and make sure that charge is successful before writing it into database
             # we should use Idempotent key to prevent sending multiple payment requests due to connection fail.
@@ -1211,38 +728,166 @@ class Checkout(Resource):
         finally:
             disconnect(conn)
 
+class Meals_Selection (Resource):
+    def post(self):
+        response = {}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            purchase_id = data['purchase_id']
+            items_selected = "'[" + ", ".join([str(item).replace("'", "\"") for item in data['items']]) + "]'"
+            delivery_day = data['delivery_day']
+            sel_menu_date = data['menu_date']
+
+            if data['is_addon']:
+                res = execute("CALL new_addons_selected_uid();", 'get', conn)
+            else:
+                res = execute("CALL new_meals_selected_uid();", 'get', conn)
+            if res['code'] != 280:
+                print("*******************************************")
+                print("* Cannot run the query to get a new \"selection_uid\" *")
+                print("*******************************************")
+                response['message'] = 'Internal Server Error.'
+                return response, 500
+            selection_uid = res['result'][0]['new_id']
+            queries = [[
+                        """
+                        INSERT INTO addons_selected
+                        SET selection_uid = '""" + selection_uid + """',
+                            sel_purchase_id = '""" + purchase_id + """',
+                            selection_time = '""" + getNow() + """',
+                            sel_menu_date = '""" + sel_menu_date + """',
+                            meal_selection = """ + items_selected + """,
+                            delivery_day = '""" + delivery_day + """';
+                        """
+                        ],
+                       [
+                       """
+                       INSERT INTO meals_selected
+                       SET selection_uid = '""" + selection_uid + """',
+                        sel_purchase_id = '""" + purchase_id + """',
+                        selection_time = '""" + getNow() + """',
+                        sel_menu_date = '""" + sel_menu_date + """',
+                        meal_selection = """ + items_selected + """,
+                        delivery_day = '""" + delivery_day + """';
+                        """
+                       ]]
+
+            if data['is_addon'] == True:
+                # write to addons selected table
+                # need a stored function to get the new selection
+                response = simple_post_execute(queries[0], ["ADDONS_SELECTED"], conn)
+            else:
+                response = simple_post_execute(queries[1], ["MEALS_SELECTED"], conn)
+            if response[1] == 201:
+                response[0]['selection_uid']= selection_uid
+            return response
+        except:
+            if "selection_uid" in locals():
+                execute("DELETE FROM addons_selected WHERE selection_uid = '" + selection_uid + "';", 'post', conn)
+                execute("DELETE FROM meals_selected WHERE selection_uid = '" + selection_uid + "';", 'post', conn)
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+
 # ---------- ADMIN ENDPOINTS ----------------#
 # admin endpoints start from here            #
 #--------------------------------------------#
-
-# Endpoint for Create/Edit menu
-class Get_Menu (Resource):
+class Plans(Resource):
+    # HTTP method GET
     def get(self):
         try:
             conn = connect()
-            menu_date = request.args.get('date')
-
-            if menu_date is None:
-                query = """
-                        SELECT * FROM sf.menu
-                        LEFT JOIN sf.meals m
-                            ON menu.menu_meal_id = m.meal_uid
-                        """
-                return simple_get_execute(query, __class__.__name__, conn)
-            else:
-                query = """
-                        SELECT * FROM sf.menu
-                        LEFT JOIN sf.meals m
-                            ON menu.menu_meal_id = m.meal_uid
-                        WHERE menu.menu_date = '""" + str(menu_date) + """';
-                        """
-                return simple_get_execute(query, __class__.__name__, conn)
+            business_uid = request.args['business_uid']
+            query = """
+                    # ADMIN QUERY 5: PLANS 
+                    SELECT * FROM sf.subscription_items si 
+                    -- WHERE itm_business_uid = "200-000007"; 
+                    WHERE itm_business_uid = \'""" + business_uid + """\';
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+# Endpoint for Create/Edit menu
+class Menu (Resource):
+    def get(self):
+        try:
+            conn = connect()
+            query = """
+                    #  ADMIN QUERY 1: 
+                    #  MEALS & MENUS: 1. CREATE/EDIT MENUS: SEE MENU FOR A PARTICULAR DAY  (ADD/DELETE MENU ITEM)
+                    SELECT * FROM sf.menu
+                    LEFT JOIN sf.meals
+                        ON menu_meal_id = meal_uid
+                    WHERE menu_date > ADDDATE(CURDATE(),-21) AND menu_date < ADDDATE(CURDATE(),45);
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
         except:
             raise BadRequest("Request failed, Please try again later.")
         finally:
             disconnect(conn)
 
-class Get_Meals (Resource):
+    def post(self):
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+
+            menu_date = data['menu_date']
+            menu_category = data['menu_category']
+            menu_type = data['menu_type']
+            meal_cat = data['meal_cat']
+            menu_meal_id = data['menu_meal_id']
+            default_meal = data['default_meal']
+            delivery_days = "'[" + ", ".join([str(item) for item in data['delivery_days']]) + "]'"
+            meal_price = data['meal_price']
+
+            menu_uid = get_new_id("CALL new_menu_uid", "get_new_menu_ID", conn)
+            if menu_uid[1] != 200:
+                return menu_uid
+            menu_uid = menu_uid[0]['result']
+
+            query = """
+                    INSERT INTO menu
+                    SET menu_uid = '""" + menu_uid + """',
+                        menu_date = '""" + menu_date + """',
+                        menu_category = '""" + menu_category + """',
+                        menu_type = '""" + menu_type + """',
+                        meal_cat = '""" + meal_cat + """',
+                        menu_meal_id = '""" + menu_meal_id + """',
+                        default_meal = '""" + default_meal + """',
+                        delivery_days = """ + delivery_days + """,
+                        meal_price = '""" + meal_price + """';
+                    """
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            if response[1] != 201:
+                return response
+            response[0]['meal_uid'] = menu_uid
+            return response
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+    def delete(self):
+        try:
+            conn = connect()
+            menu_uid = request.args['menu_uid']
+
+            query = """
+                    DELETE FROM menu WHERE menu_uid = '""" + menu_uid + """';
+                    """
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            if response[1] != 201:
+                return response
+            return response[0], 202
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+class Meals (Resource):
     def get(self):
         response = {}
         try:
@@ -1256,21 +901,114 @@ class Get_Meals (Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
-class Get_Recipes (Resource):
+    def post(self):
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+
+            meal_category = data['meal_category']
+            meal_name = data['meal_name']
+            meal_desc = data['meal_desc']
+            meal_hint = "'" + data['meal_hint'] + "'" if data['meal_hint'] else 'NULL'
+            meal_photo_url = "'" + data['meal_photo_url'] + "'" if data['meal_photo_url'] else 'NULL'
+            meal_calories = data['meal_calories']
+            meal_protein = data['meal_protein']
+            meal_carbs = data['meal_carbs']
+            meal_fiber = data['meal_fiber']
+            meal_sugar = data['meal_sugar']
+            meal_fat = data['meal_fat']
+            meal_sat = data['meal_sat']
+
+            meal_uid = get_new_id("CALL new_meal_uid", "get_new_meal_ID", conn)
+            if meal_uid[1] != 200:
+                return meal_uid
+            meal_uid = meal_uid[0]['result']
+
+            query = """
+                    INSERT INTO meals
+                    SET meal_uid = '""" + meal_uid + """',
+                        meal_category = '""" + meal_category + """',
+                        meal_name = '""" + meal_name + """',
+                        meal_desc = '""" + meal_desc + """',
+                        meal_hint = """ + meal_hint + """,
+                        meal_photo_url = """ + meal_photo_url + """,
+                        meal_calories = '""" + meal_calories + """',
+                        meal_protein = '""" + meal_protein + """',
+                        meal_carbs = '""" + meal_carbs + """',
+                        meal_fiber = '""" + meal_fiber + """',
+                        meal_sugar = '""" + meal_sugar + """',
+                        meal_fat = '""" + meal_fat + """',
+                        meal_sat = '""" + meal_sat + """';
+                    """
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            if response[1] != 201:
+                return response
+            response[0]['meal_uid'] = meal_uid
+            return response
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+    def put(self):
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            meal_uid = data['meal_uid']
+            meal_category = data['meal_category']
+            meal_name = data['meal_name']
+            meal_desc = data['meal_desc']
+            meal_hint = "'" + data['meal_hint'] + "'" if data['meal_hint'] else 'NULL'
+            meal_photo_url = "'" + data['meal_photo_url'] + "'" if data['meal_photo_url'] else 'NULL'
+            meal_calories = data['meal_calories']
+            meal_protein = data['meal_protein']
+            meal_carbs = data['meal_carbs']
+            meal_fiber = data['meal_fiber']
+            meal_sugar = data['meal_sugar']
+            meal_fat = data['meal_fat']
+            meal_sat = data['meal_sat']
+
+            query = """
+                    UPDATE meals
+                    SET meal_category = '""" + meal_category + """',
+                        meal_name = '""" + meal_name + """',
+                        meal_desc = '""" + meal_desc + """',
+                        meal_hint = """ + meal_hint + """,
+                        meal_photo_url = """ + meal_photo_url + """,
+                        meal_calories = '""" + meal_calories + """',
+                        meal_protein = '""" + meal_protein + """',
+                        meal_carbs = '""" + meal_carbs + """',
+                        meal_fiber = '""" + meal_fiber + """',
+                        meal_sugar = '""" + meal_sugar + """',
+                        meal_fat = '""" + meal_fat + """',
+                        meal_sat = '""" + meal_sat + """'
+                    WHERE meal_uid = '""" + meal_uid + """';
+                    """
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            if response[1] != 201:
+                return response
+            response[0]['message'] = "Update successful."
+            response[0]['meal_uid'] = meal_uid
+            return response
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+class Recipes (Resource):
     def get(self):
         try:
             conn = connect()
-            meal_uid = request.args['meal_uid']
             query = """
-                    # ADMIN QUERY 3: RECIPES
-                    SELECT * FROM sf.meals m 
-                    LEFT JOIN sf.recipes rec
-                        ON rec.recipe_meal_id = m.meal_uid
-                    LEFT JOIN sf.ingredients ing
-                        ON recipe_ingredient_id = ing.ingredient_uid
-                    LEFT JOIN sf.conversion_units cu
-                        ON rec.recipe_measure_id = cu.measure_unit_uid
-                    WHERE m.meal_uid = '""" + meal_uid + """';
+                    #  ADMIN QUERY 3: 
+                    #  MEALS & MENUS  4. EDIT MEAL RECIPE: 
+                    SELECT * FROM sf.meals
+                    LEFT JOIN sf.recipes
+                        ON meal_uid = recipe_meal_id
+                    LEFT JOIN sf.ingredients
+                        ON recipe_ingredient_id = ingredient_uid
+                    LEFT JOIN sf.conversion_units
+                        ON recipe_measure_id = measure_unit_uid;
                     """
             return simple_get_execute(query, __class__.__name__, conn)
         except:
@@ -1278,17 +1016,97 @@ class Get_Recipes (Resource):
         finally:
             disconnect(conn)
 
-class Get_New_Ingredient (Resource):
+class Ingredients (Resource):
     def get(self):
         try:
             conn = connect()
             query = """
-                    # ADMIN QUERY 4: NEW INGREDIENT
-                    SELECT * FROM sf.ingredients ing
-                    LEFT JOIN sf.inventory inv
-                        ON ing.ingredient_uid = inv.inventory_ingredient_id
-                    LEFT JOIN sf.conversion_units cu
-                        ON inv.inventory_measure_id = cu.measure_unit_uid;
+                    #  ADMIN QUERY 4: 
+                    #  MEALS & MENUS  5. CREATE NEW INGREDIENT:
+                    SELECT * FROM sf.ingredients
+                    LEFT JOIN sf.inventory
+                        ON ingredient_uid = inventory_ingredient_id
+                    LEFT JOIN sf.conversion_units
+                        ON inventory_measure_id = measure_unit_uid;
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+            
+    def post(self):
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            ingredient_desc = data['ingredient_desc']
+            package_size = data['package_size']
+            package_measure = data['package_measure']
+            package_unit = data['package_unit']
+            package_cost = data['package_cost']
+
+            ingredient_uid_request = get_new_id("CALL new_ingredient_uid();", "Get_New_Ingredient_uid", conn)
+
+            if ingredient_uid_request[1]!= 200:
+                return ingredient_uid_request
+            ingredient_uid = ingredient_uid_request[0]['result']
+            print('here')
+            query = """
+                    INSERT INTO ingredients
+                    SET ingredient_uid = '""" + ingredient_uid + """',
+                        ingredient_desc = '""" + ingredient_desc + """',
+                        package_size = '""" + package_size + """',
+                        package_measure = '""" + package_measure + """',
+                        package_unit = '""" + package_unit + """',
+                        package_cost = '""" + package_cost + """';
+                    """
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            if response[1] != 201:
+                return response
+            response[0]['ingredient_uid'] = ingredient_uid
+            return response
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+    def put(self):
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            ingredient_uid = data['ingredient_uid']
+            ingredient_desc = data['ingredient_desc']
+            package_size = data['package_size']
+            package_measure = data['package_measure']
+            package_unit = data['package_unit']
+            package_cost = data['package_cost']
+
+            query = """
+                    UPDATE ingredients
+                    SET 
+                        ingredient_desc = '""" + ingredient_desc + """',
+                        package_size = '""" + package_size + """',
+                        package_measure = '""" + package_measure + """',
+                        package_unit = '""" + package_unit + """',
+                        package_cost = '""" + package_cost + """'
+                    WHERE ingredient_uid = '""" + ingredient_uid + """';
+                    """
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            if response[1] != 201:
+                return response
+            return response[0], 202
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+class Measure_Unit (Resource):
+    def get(self):
+        try:
+            conn = connect()
+            query = """
+                    #  ADMIN QUERY 5: 
+                    #  MEALS & MENUS  6. CREATE NEW MEASURE UNIT: 
+                    SELECT * FROM sf.conversion_units;
                     """
             return simple_get_execute(query, __class__.__name__, conn)
         except:
@@ -1296,68 +1114,12 @@ class Get_New_Ingredient (Resource):
         finally:
             disconnect(conn)
 
-class Get_Ingredients_To_Purchase (Resource):
-    def get(self):
-        try:
-            conn = connect()
-            business_uid = request.args['business_uid']
-            query = """
-                    # ADMIN QUERY 10: INGREDIENTS TO PURCHASE
-                    SELECT *,
-                        orders_by_date.quantity * rec.recipe_ingredient_qty * cu.conversion_ratio AS ingredient_qty
-                    FROM (
-                        SELECT *,
-                            COUNT(n) as quantity
-                        FROM (
-                            SELECT menu_date,
-                                substring_index(substring_index(final_selection,';',n),';',-1) AS final_meals_selected,
-                                n
-                            FROM (# QUERY 2: MASTER QUERY:  WHO ORDERED WHAT INCLUDING DEFAULTS AND SELECTIONS
-                                  # MODIFIED TO SHOW ONLY PURCHASE_ID, MENU_DATE AND FINAL_MEAL_SELECTIONS
-                                SELECT 
-                                    purchase_id,
-                                    menu_date,
-                                    CASE
-                                        WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 5  THEN  def_5_meal
-                                        WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 10  THEN  def_10_meal
-                                        WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 15  THEN  def_15_meal
-                                        WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 20  THEN  def_20_meal
-                                        ELSE meal_selection
-                                        END 
-                                        AS final_selection
-                                FROM (
-                                    SELECT *
-                                    FROM sf.lpsilp,
-                                        sf.default_meal)
-                                    AS lpsilpdm
-                                LEFT JOIN sf.latest_combined_meal AS lcm
-                                    ON lpsilpdm.purchase_id = lcm.sel_purchase_id AND
-                                        lpsilpdm.menu_date = lcm.sel_menu_date
-                                WHERE lpsilpdm.pur_business_uid = '""" + business_uid + """') 
-                                AS final_meals
-                            JOIN numbers ON char_length(final_selection) - char_length(replace(final_selection, ';', '')) >= n - 1)
-                                AS sub
-                        GROUP BY menu_date,
-                            final_meals_selected)
-                        AS orders_by_date
-                    LEFT JOIN sf.recipes rec
-                        ON orders_by_date.final_meals_selected = rec.recipe_meal_id
-                    LEFT JOIN sf.conversion_units cu
-                        ON rec.recipe_measure_id = cu.measure_unit_uid;
-                    """
-            return simple_get_execute(query, __class__.__name__, conn)
-        except:
-            raise BadRequest("Request failed, please try again later.")
-        finally:
-            disconnect(conn)
-class Get_Coupon(Resource):
+class Coupon(Resource):
     def get(self):
         try:
             conn = connect()
             query = """
-                    # ADMIN QUERY 6: COUPONS
-                    SELECT * FROM sf.coupons cup
-                    WHERE cup.cup_business_id IS NULL;
+                    SELECT * FROM sf.coupons;
                     """
             return simple_get_execute(query, __class__.__name__, conn)
         except:
@@ -1365,50 +1127,32 @@ class Get_Coupon(Resource):
         finally:
             disconnect(conn)
 
-class Get_Orders_By_Purchase_Id(Resource):
+class Ordered_By_Date(Resource):
     def get(self):
         response = {}
         try:
             conn = connect()
-            business_uid = request.args['business_uid']
             query = """
-                    # ADMIN QUERY 8: ORDERS BY PURCHASE_ID
-                    SELECT *,
-                        COUNT(n) as quantity
-                    FROM (
-                        SELECT purchase_id,
-                            menu_date,
-                            substring_index(substring_index(final_selection,';',n),';',-1) AS final_meals_selected,
-                            n
-                        FROM (# QUERY 2: MASTER QUERY:  WHO ORDERED WHAT INCLUDING DEFAULTS AND SELECTIONS
-                              # MODIFIED TO SHOW ONLY PURCHASE_ID, MENU_DATE AND FINAL_MEAL_SELECTIONS
-                            SELECT 
-                                purchase_id,
-                                menu_date,
-                                CASE
-                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 5  THEN  def_5_meal
-                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 10  THEN  def_10_meal
-                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 15  THEN  def_15_meal
-                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 20  THEN  def_20_meal
-                                    ELSE meal_selection
-                                    END 
-                                    AS final_selection
-                                    
-                            FROM (
-                                SELECT *
-                                FROM sf.lpsilp,
-                                    sf.default_meal)
-                                AS lpsilpdm
-                            LEFT JOIN sf.latest_combined_meal AS lcm
-                                ON lpsilpdm.purchase_id = lcm.sel_purchase_id AND
-                                    lpsilpdm.menu_date = lcm.sel_menu_date
-                            WHERE lpsilpdm.pur_business_uid = '""" + business_uid + """') 
-                            AS final_meals
-                        JOIN numbers ON char_length(final_selection) - char_length(replace(final_selection, ';', '')) >= n - 1)
-                            AS sub
-                    GROUP BY purchase_id,
-                        menu_date,
-                        final_meals_selected;
+                    #  ADMIN QUERY 9: 
+                    #  ORDERS & INGREDIENTS  1. HOW MUCH HAS BEEN ORDERED BY DATE
+                    #  LIKE VIEW E BUT WITH SPECIFIC COLUMNS CALLED OUT
+                    SELECT d_menu_date,
+                        jt_item_uid,
+                        jt_name,
+                        sum(jt_qty)
+                    FROM(
+                        SELECT *
+                        FROM sf.final_meal_selection AS jot,
+                        JSON_TABLE (jot.final_combined_selection, '$[*]' 
+                            COLUMNS (
+                                    jt_id FOR ORDINALITY,
+                                    jt_item_uid VARCHAR(255) PATH '$.item_uid',
+                                    jt_name VARCHAR(255) PATH '$.name',
+                                    jt_qty INT PATH '$.qty',
+                                    jt_price DOUBLE PATH '$.price')
+                                ) AS jt)
+                        AS total_ordered
+                    GROUP BY d_menu_date, jt_name;
                     """
             return simple_get_execute(query, __class__.__name__, conn)
         except:
@@ -1416,149 +1160,152 @@ class Get_Orders_By_Purchase_Id(Resource):
         finally:
             disconnect(conn)
 
-class Get_Orders_By_Menu_Date (Resource):
+class Ingredients_Need (Resource):
     def get(self):
         try:
             conn = connect()
-            business_uid = request.args['business_uid']
             query = """
-                    # ADMIN QUERY 9: ORDERS BY MENU_DATE
+                    #  ADMIN QUERY 10: 
+                    #  ORDERS & INGREDIENTS    2. WHAT INGREDIENTS NEED TO BE PURCHASED BY DATE
+                    SELECT -- *,
+                        d_menu_date,
+                        ingredient_uid,
+                        ingredient_desc,
+                        sum(qty_needed), 
+                        units
+                    FROM(
                     SELECT *,
-                        COUNT(n) as quantity
+                        recipe_ingredient_qty / conversion_ratio AS qty_needed,
+                        common_unit AS units
                     FROM (
-                        SELECT menu_date,
-                            substring_index(substring_index(final_selection,';',n),';',-1) AS final_meals_selected,
-                            n
-                        FROM (# QUERY 2: MASTER QUERY:  WHO ORDERED WHAT INCLUDING DEFAULTS AND SELECTIONS
-                              # MODIFIED TO SHOW ONLY PURCHASE_ID, MENU_DATE AND FINAL_MEAL_SELECTIONS
-                            SELECT 
-                                purchase_id,
-                                menu_date,
-                                CASE
-                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 5  THEN  def_5_meal
-                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 10  THEN  def_10_meal
-                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 15  THEN  def_15_meal
-                                    WHEN (combined_selection IS NULL OR meal_selection = "SURPRISE") AND num_items = 20  THEN  def_20_meal
-                                    ELSE meal_selection 
-                                    END 
-                                    AS final_selection
-                            FROM (
-                                SELECT *
-                                FROM sf.lpsilp,
-                                    sf.default_meal)
-                                AS lpsilpdm
-                            LEFT JOIN sf.latest_combined_meal AS lcm
-                                ON lpsilpdm.purchase_id = lcm.sel_purchase_id AND
-                                    lpsilpdm.menu_date = lcm.sel_menu_date
-                            WHERE lpsilpdm.pur_business_uid = '""" + business_uid + """') 
-                            AS final_meals
-                        JOIN numbers ON char_length(final_selection) - char_length(replace(final_selection, ';', '')) >= n - 1)
-                            AS sub
-                    GROUP BY menu_date,
-                        final_meals_selected;
+                        SELECT d_menu_date,
+                            jt_item_uid,
+                            jt_name,
+                            sum(jt_qty)
+                        FROM(
+                            SELECT *
+                            FROM sf.final_meal_selection AS jot,
+                            JSON_TABLE (jot.final_combined_selection, '$[*]' 
+                                COLUMNS (
+                                        jt_id FOR ORDINALITY,
+                                        jt_item_uid VARCHAR(255) PATH '$.item_uid',
+                                        jt_name VARCHAR(255) PATH '$.name',
+                                        jt_qty INT PATH '$.qty',
+                                        jt_price DOUBLE PATH '$.price')
+                                    ) AS jt)
+                                    AS total_ordered
+                        GROUP BY d_menu_date, jt_name) 
+                        AS ordered
+                    LEFT JOIN sf.recipes
+                        ON jt_item_uid = recipe_meal_id
+                    LEFT JOIN sf.ingredients
+                        ON recipe_ingredient_id = ingredient_uid
+                    LEFT JOIN sf.conversion_units
+                        ON recipe_measure_id = measure_unit_uid)
+                        AS ing
+                    GROUP BY d_menu_date, ingredient_uid;
                     """
             return simple_get_execute(query, __class__.__name__, conn)
         except:
-            raise BadRequest('Request failed, please try again later.')
+            raise BadRequest("Request failed, please try again later.")
         finally:
             disconnect(conn)
-
 # Define API routes
 # Customer APIs
 
-#---------------------------- Select Meal plan pages ----------------------------#
-#  * The "plans" endpoint accepts only get request with one required parameter.  #
-#  It will return all the meal plans in the SUBSCRIPTION_ITEM table. The returned#
-#  info contains all meal plans (which is grouped by item's name) and its        #
-#  associated details.                                                           #
-api.add_resource(Plans, '/api/v2/plans')
-#--------------------------------------------------------------------------------#
+
 
 #---------------------------- Signup/ Login page --------------------------------#
+api.add_resource(SignUp, '/api/v2/signup')
 #  * The "signup" endpoint accepts only POST request with appropriate named      #
 #  parameters. Please check the documentation for the right format of those named#
 #  parameters.                                                                   #
-api.add_resource(SignUp, '/api/v2/signup')
+api.add_resource(Login, '/api/v2/login')
 #  * The "Login" endpoint accepts only POST request with at least 2 parameters   #
 # in its body. The first param is "email" and the second one is either "password"#
 # or "refresh_token". We are gonna re-use the token we got from facebook or      #
 # google for our site and we'll pick the refresh token because it will not       #
 # expire.                                                                        #
-api.add_resource(Login, '/api/v2/login')
+#--------------------------------------------------------------------------------#
+
+#---------------------------- Select Meal plan pages ----------------------------#
+# We can use the Plans endpoint (in the Admin endpoints section below) to get    #
+# needed info.
 #--------------------------------------------------------------------------------#
 
 #------------- Checkout, Meal Selection and Meals Schedule pages ----------------#
-#  * The "Meals" endpoint only accepts GET request with an optional parameter. It#
-# will return the whole available menu info. If the "startDate" param is given.  #
-# The returning menu info only contain the menu which starts from that date.     #
-# Notice that the optional parameter must go after the slash.
-api.add_resource(Meals, '/api/v2/meals', '/api/v2/meals/<string:startDate>')
-#  * The "accountsalt" endpoint accepts only GET request with a required param.  #
-#  It will return the information of password hashed and password salt for an     #
-# associated email account.
-api.add_resource(AccountSalt, '/api/v2/accountsalt')
-#  * The "accountpurchases" only accepts GET request with 2 required parameters. #
-#  It will return the information of all current purchases of a specific customer#
-#  of a specific business. Accepting parameters for this endpoints are:          #
-#  "customer_uid", "business_uid".                                                 #
-api.add_resource(AccountPurchases, '/api/v2/accountpurchases')
-#  * The "next_billing_date" only accepts GET request with 1 required parameter. #
-#  It will return the information of the next billing date of a specific business#
-# The required parameter is: "business_uid
-api.add_resource(Next_Billing_Date, '/api/v2/next_billing_date')
-#  * The "next_addon_charge" only accepts GET request without any parameter. It  #
-# will return the next addon charge information.
-api.add_resource(Next_Addon_Charge, '/api/v2/next_addon_charge')
-#  * The "selectedmeals" only accepts GET request with two required parameters   #
+api.add_resource(Meals_Selected, '/api/v2/meals_selected')
+#  * The "Meals_Selected" only accepts GET request with one required parameters  #
 # "customer_id" and "business_id".It will return the information of all selected #
 # meals and addons which are associated with the specific purchase.              #
-api.add_resource(Meals_Selected, '/api/v2/meals_selected')
-#  * The "Meals_Selection" accepts POST request with appropriate parameters      #
-#  Please read the documentation for these parameters and its formats.           #
-api.add_resource(Meals_Selection, '/api/v2/meals_selection')
+api.add_resource(Get_Upcoming_Menu, '/api/v2/upcoming_menu' )
+#  * The "Get_Upcoming_Menu" only accepts GET request without required param.    #
+# It will return the information of all upcoming menu items.                     #
+api.add_resource(Get_Latest_Purchases_Payments, '/api/v2/customer_lplp')
+#  * The "Get_Latest_Purchases_Payments" only accepts GET request with 1 required#
+#  parameters ("customer_uid"). It will return the information of all current    #
+#  purchases of the customer associated with the given customer_uid.
+api.add_resource(Next_Addon_Charge, '/api/v2/next_addon_charge')
+#  * The "next_addon_charge" only accepts GET request without any parameter. It  #
+# will return the next addon charge information.
+api.add_resource(AccountSalt, '/api/v2/accountsalt')
+#  * The "accountsalt" endpoint accepts only GET request with one required param. #
+#  It will return the information of password hashed and password salt for an     #
+# associated email account.
+api.add_resource(Checkout, '/api/v2/checkout')
 #  * The "checkout" accepts POST request with appropriate parameters. Please read#
 # the documentation for these parameters and its formats.                        #
-api.add_resource(Checkout, '/api/v2/checkout')
+##################################################################################
+api.add_resource(Meals_Selection, '/api/v2/meals_selection')
+#  * The "Meals_Selection" accepts POST request with appropriate parameters      #
+#  Please read the documentation for these parameters and its formats.           #
 #--------------------------------------------------------------------------------#
 
 #*********************************************************************************#
 #*******************************  ADMIN APIs  ************************************#
+#------------------------------------   UNKNOWN   --------------------------------#
+api.add_resource(Plans, '/api/v2/plans')
+#  * The "plans" endpoint accepts only get request with one required parameter.  #
+#  It will return all the meal plans in the SUBSCRIPTION_ITEM table. The returned#
+#  info contains all meal plans (which is grouped by item's name) and its        #
+#  associated details.                                                           #
+#--------------------------------------------------------------------------------#
+
 #---------------------------- Create / Edit Menu pages ---------------------------#
+api.add_resource(Menu, '/api/v2/menu')
 #  * The get_menu endpoint accepts only get request and returns the menu's        #
 #  information. If there is a given param (named "menu_date") in the get request. #
 #  The returned info will associate with that "date" otherwise all information in #
 #  the menu table will be returned.                                               #
-api.add_resource(Get_Menu, '/api/v2/get_menu')
+api.add_resource(Meals, '/api/v2/meals')
 #  * The get_meals endpoint accepts only get request and return all associate     #
 #   info. This endpoint does not accept any argument.                             #
 # Notice: these two endpoint will replace the old three ones that were using in   #
 # PTYD website. from these two endpoint, the front end can extract whatever info  #
 # it needs.                                                                       #
-api.add_resource(Get_Meals, '/api/v2/get_meals')
 #---------------------------------------------------------------------------------#
+
+api.add_resource(Recipes, '/api/v2/recipes')
 #  * The get_recipes endpoint accepts only get request and return all associate   #
 #   info. This endpoint requires one parameter named "meal_uid".                  #
-api.add_resource(Get_Recipes, '/api/v2/get_recipes')
+api.add_resource(Ingredients, '/api/v2/ingredients')
 #  * The get_new_ingredients endpoint accepts only get request and return all     #
 #  associate info. This endpoint does not require any parameter.                  #
-api.add_resource(Get_New_Ingredient, '/api/v2/get_new_ingredients')
-#  * The get_ingredients_to_purchase accepts only get request and return all
-#  associate info. This endpoint requires one parameter named "business_uid".     #
-api.add_resource(Get_Ingredients_To_Purchase, '/api/v2/get_ingredients_to_purchase')
+api.add_resource(Measure_Unit, '/api/v2/measure_unit')
 
 #-------------------------------- Plan / Coupon pages ----------------------------#
+api.add_resource(Coupon, '/api/v2/coupons')
 #  * The user can access /api/v2/plans endpoint to get all Plans.                 #
 #  * The get_coupon endpoint accepts only GET request with a required argument    #
-#  ("business_uid"). This endpoint will returns all active coupons in the COUPON   #
+#  ("business_uid"). This endpoint will returns all active coupons in the COUPON  #
 #  table.                                                                         #
-api.add_resource(Get_Coupon, '/api/v2/get_coupons')
+#---------------------------------------------------------------------------------#
 #  * The Get_Orders_By_Purchase_id endpoint accepts only GET request without any  #
-#  parameters. It will return meal orders based on the purchase_uid.               #
-api.add_resource(Get_Orders_By_Purchase_Id, '/api/v2/get_orders_by_purchase_id')
-#  * The Get_Orders_By_Menu_Date endpoint accepts only GET request without any    #
-#  parameters. It will return meal orders based on the menu date.                 #
-api.add_resource(Get_Orders_By_Menu_Date, '/api/v2/get_orders_by_menu_date')
-
+#  parameters. It will return meal orders based on the purchase_uid.              #
+api.add_resource(Ordered_By_Date, '/api/v2/ordered_by_date')
+#  * The "Ingredients_Need accepts only get request and return all associate info.#
+#  This endpoint requires one parameter named "business_uid".                     #
+api.add_resource(Ingredients_Need, '/api/v2/ingredients_need')
 
 #**********************************************************************************#
 
