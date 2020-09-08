@@ -487,21 +487,12 @@ class Get_Latest_Purchases_Payments(Resource):
             conn = connect()
             customer_uid = request.args['customer_uid']
             query = """
-                    # CUSTOMER QUERY 5: NEXT SUBSCRIPTION BILLING DATE (WITH TRUE_SKIPS)
-                    SELECT *,
-                        IF (nbd.true_skips > 0,
-                        ADDDATE(nbd.start_delivery_date, (nbd.num_issues + nbd.true_skips) * 7 / nbd.deliveries_per_week - 3),
-                        ADDDATE(nbd.start_delivery_date, (nbd.num_issues +        0      ) * 7 / nbd.deliveries_per_week - 3) ) AS next_billing_date
-                    FROM (
-                        SELECT lplpibr.*,
-                            si.*,
-                            ts.true_skips
-                        FROM sf.lplp_items_by_row AS lplpibr
-                        LEFT JOIN sf.subscription_items si
-                            ON lplpibr.lplpibr_jt_item_uid = si.item_uid
-                        LEFT JOIN sf.true_skips AS ts
-                            ON lplpibr.lplpibr_purchase_id = ts.d_purchase_id) AS nbd
-                    WHERE lplpibr_customer_uid = '""" + customer_uid + """';
+                    # CUSTOMER QUERY 2: CUSTOMER LATEST PURCHASE AND LATEST PAYMENT HISTORY
+                    # NEED CUSTOMER ADDRESS IN CASE CUSTOMER HAS NOT ORDERED BEFORE
+                    SELECT * FROM sf.lplp
+                    LEFT JOIN sf.customers c
+                        ON lplp.pur_customer_uid = c.customer_uid
+                    WHERE pur_customer_uid = '""" + customer_uid + """';
                     """
             response = simple_get_execute(query, __class__.__name__, conn)
             if response[1] != 200:
@@ -563,8 +554,6 @@ class AccountSalt(Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
-
-
 
 class Checkout(Resource):
     def post(self):
@@ -870,6 +859,7 @@ class Menu (Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+
     def delete(self):
         try:
             conn = connect()
@@ -1034,11 +1024,12 @@ class Ingredients (Resource):
             raise BadRequest("Request failed, please try again later.")
         finally:
             disconnect(conn)
-            
+
     def post(self):
         try:
             conn = connect()
             data = request.get_json(force=True)
+
             ingredient_desc = data['ingredient_desc']
             package_size = data['package_size']
             package_measure = data['package_measure']
@@ -1050,7 +1041,6 @@ class Ingredients (Resource):
             if ingredient_uid_request[1]!= 200:
                 return ingredient_uid_request
             ingredient_uid = ingredient_uid_request[0]['result']
-            print('here')
             query = """
                     INSERT INTO ingredients
                     SET ingredient_uid = '""" + ingredient_uid + """',
@@ -1069,6 +1059,7 @@ class Ingredients (Resource):
             raise BadRequest("Request failed, please try again later.")
         finally:
             disconnect(conn)
+
     def put(self):
         try:
             conn = connect()
@@ -1093,9 +1084,27 @@ class Ingredients (Resource):
             response = simple_post_execute([query], [__class__.__name__], conn)
             if response[1] != 201:
                 return response
-            return response[0], 202
+            return response[0], 200
         except:
             raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+    def delete(self):
+        try:
+            conn = connect()
+            ingredient_uid = request.args['ingredient_uid']
+
+            query = """
+                    DELETE FROM ingredients WHERE ingredient_uid = '""" + ingredient_uid + """';
+                    """
+            print(query)
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            if response[1] != 201:
+                return response
+            return response[0], 202
+        except:
+            raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
 
@@ -1114,7 +1123,86 @@ class Measure_Unit (Resource):
         finally:
             disconnect(conn)
 
-class Coupon(Resource):
+    def post(self):
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+
+            type = data['type']
+            recipe_unit = data['recipe_unit']
+            conversion_ratio = data['conversion_ratio']
+            common_unit = data['common_unit']
+
+            measure_unit_uid_request = get_new_id("CALL new_measure_unit_uid();", "Get_New_Measure_Unit_uid", conn)
+
+            if measure_unit_uid_request[1]!= 200:
+                return measure_unit_uid_request
+            measure_unit_uid = measure_unit_uid_request[0]['result']
+
+            query = """
+                    INSERT INTO conversion_units
+                    SET measure_unit_uid = '""" + measure_unit_uid + """',
+                        type = '""" + type + """',
+                        recipe_unit = '""" + recipe_unit + """',
+                        conversion_ratio = '""" + conversion_ratio + """',
+                        common_unit = '""" + common_unit + """';
+                    """
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            if response[1] != 201:
+                return response
+            response[0]['measure_unit_uid'] = measure_unit_uid
+            return response
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+    def put(self):
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+
+            measure_unit_uid = data['measure_unit_uid']
+            type = data['type']
+            recipe_unit = data['recipe_unit']
+            conversion_ratio = data['conversion_ratio']
+            common_unit = data['common_unit']
+
+            query = """
+                    UPDATE conversion_units
+                    SET type = '""" + type + """',
+                        recipe_unit = '""" + recipe_unit + """',
+                        conversion_ratio = '""" + conversion_ratio + """',
+                        common_unit = '""" + common_unit + """'
+                    WHERE measure_unit_uid = '""" + measure_unit_uid + """';
+                    """
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            if response[1] != 201:
+                return response
+            return response[0], 200
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+    def delete(self):
+        try:
+            conn = connect()
+            ingredient_uid = request.args['ingredient_uid']
+
+            query = """
+                    DELETE FROM conversion_units WHERE measure_unit_uid = '""" + measure_unit_uid + """';
+                    """
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            if response[1] != 201:
+                return response
+            return response[0], 202
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+class Coupons(Resource):
     def get(self):
         try:
             conn = connect()
@@ -1127,9 +1215,117 @@ class Coupon(Resource):
         finally:
             disconnect(conn)
 
+    def post(self):
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            coupon_id = data['coupon_id']
+            valid = data['valid']
+            discount_percent = data['discount_percent']
+            discount_amount = data['discount_amount']
+            discount_shipping = data['discount_shipping']
+            expire_date = data['expire_date']
+            limits = data['limits']
+            notes = data['notes']
+            num_used = data['num_used'] if data.get("num_used") else 0
+            recurring = data['recurring']
+            email_id = "'" + data['email_id'] + "'" if data['email_id'] else 'NULL'
+            cup_business_uid = data['cup_business_uid']
+
+            coupon_uid_request = get_new_id("CALL new_coupons_uid();", "Get_New_Coupons_uid", conn)
+            if coupon_uid_request[1]!= 200:
+                return coupon_uid_request
+
+            coupon_uid = coupon_uid_request[0]['result']
+            query = """
+                    INSERT INTO coupons
+                    SET coupon_uid = '""" + coupon_uid + """',
+                        coupon_id = '""" + coupon_id + """',
+                        valid = '""" + valid + """',
+                        discount_percent = '""" + discount_percent + """',
+                        discount_amount = '""" + discount_amount + """',
+                        discount_shipping = '""" + discount_shipping + """',
+                        expire_date = '""" + expire_date + """',
+                        limits = '""" + limits + """',
+                        notes = '""" + notes + """',
+                        num_used = '""" + str(num_used) + """',
+                        recurring = '""" + recurring + """',
+                        email_id = """ + email_id + """,
+                        cup_business_uid = '""" + cup_business_uid + """';
+                    """
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            if response[1] != 201:
+                return response
+            response[0]['coupon_uid'] = coupon_uid
+            return response
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+    def put(self):
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+
+            coupon_uid = data['coupon_uid']
+            coupon_id = data['coupon_id']
+            valid = data['valid']
+            discount_percent = data['discount_percent']
+            discount_amount = data['discount_amount']
+            discount_shipping = data['discount_shipping']
+            expire_date = data['expire_date']
+            limits = data['limits']
+            notes = data['notes']
+            num_used = data['num_used'] if data.get("num_used") else 0
+            recurring = data['recurring']
+            email_id = "'" + data['email_id'] + "'" if data['email_id'] else 'NULL'
+            cup_business_uid = data['cup_business_uid']
+
+            query = """
+                    UPDATE coupons
+                    SET coupon_id = '""" + coupon_id + """',
+                        valid = '""" + valid + """',
+                        discount_percent = '""" + discount_percent + """',
+                        discount_amount = '""" + discount_amount + """',
+                        discount_shipping = '""" + discount_shipping + """',
+                        expire_date = '""" + expire_date + """',
+                        limits = '""" + limits + """',
+                        notes = '""" + notes + """',
+                        num_used = '""" + str(num_used) + """',
+                        recurring = '""" + recurring + """',
+                        email_id = """ + email_id + """,
+                        cup_business_uid = '""" + cup_business_uid + """'
+                    WHERE coupon_uid = '""" + coupon_uid + """';
+                    """
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            if response[1] != 201:
+                return response
+            return response[0], 200
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+    def delete(self):
+        try:
+            conn = connect()
+            coupon_uid = request.args['coupon_uid']
+
+            query = """
+                    DELETE FROM coupons WHERE coupon_uid = '""" + coupon_uid + """';
+                    """
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            if response[1] != 201:
+                return response
+            return response[0], 202
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
 class Ordered_By_Date(Resource):
     def get(self):
-        response = {}
         try:
             conn = connect()
             query = """
@@ -1236,8 +1432,8 @@ api.add_resource(Login, '/api/v2/login')
 #------------- Checkout, Meal Selection and Meals Schedule pages ----------------#
 api.add_resource(Meals_Selected, '/api/v2/meals_selected')
 #  * The "Meals_Selected" only accepts GET request with one required parameters  #
-# "customer_id" and "business_id".It will return the information of all selected #
-# meals and addons which are associated with the specific purchase.              #
+# "customer_id".It will return the information of all selected meals and addons  #
+# which are associated with the specific purchase.                               #
 api.add_resource(Get_Upcoming_Menu, '/api/v2/upcoming_menu' )
 #  * The "Get_Upcoming_Menu" only accepts GET request without required param.    #
 # It will return the information of all upcoming menu items.                     #
@@ -1247,7 +1443,7 @@ api.add_resource(Get_Latest_Purchases_Payments, '/api/v2/customer_lplp')
 #  purchases of the customer associated with the given customer_uid.
 api.add_resource(Next_Addon_Charge, '/api/v2/next_addon_charge')
 #  * The "next_addon_charge" only accepts GET request without any parameter. It  #
-# will return the next addon charge information.
+# will return the next addon charge information.                                 #
 api.add_resource(AccountSalt, '/api/v2/accountsalt')
 #  * The "accountsalt" endpoint accepts only GET request with one required param. #
 #  It will return the information of password hashed and password salt for an     #
@@ -1261,9 +1457,9 @@ api.add_resource(Meals_Selection, '/api/v2/meals_selection')
 #  Please read the documentation for these parameters and its formats.           #
 #--------------------------------------------------------------------------------#
 
-#*********************************************************************************#
-#*******************************  ADMIN APIs  ************************************#
-#------------------------------------   UNKNOWN   --------------------------------#
+#********************************************************************************#
+#*******************************  ADMIN APIs  ***********************************#
+#---------------------------------   Subscriptions   ----------------------------#
 api.add_resource(Plans, '/api/v2/plans')
 #  * The "plans" endpoint accepts only get request with one required parameter.  #
 #  It will return all the meal plans in the SUBSCRIPTION_ITEM table. The returned#
@@ -1273,38 +1469,47 @@ api.add_resource(Plans, '/api/v2/plans')
 
 #---------------------------- Create / Edit Menu pages ---------------------------#
 api.add_resource(Menu, '/api/v2/menu')
-#  * The get_menu endpoint accepts only get request and returns the menu's        #
-#  information. If there is a given param (named "menu_date") in the get request. #
-#  The returned info will associate with that "date" otherwise all information in #
-#  the menu table will be returned.                                               #
+#  * The "Menu" endpoint accepts GET, POST, and DELETE request. For GET request,  #
+#  this endpoint does not need any parameters and returns all the menu's info.    #
+#  For the POST request, we need the appropriate JSON format for request.         #
+#  The DELETE request needs the "menu_uid" as the parameter in order to delete    #
+# that associated record in the database.
 api.add_resource(Meals, '/api/v2/meals')
-#  * The get_meals endpoint accepts only get request and return all associate     #
-#   info. This endpoint does not accept any argument.                             #
-# Notice: these two endpoint will replace the old three ones that were using in   #
-# PTYD website. from these two endpoint, the front end can extract whatever info  #
-# it needs.                                                                       #
+#  * The "Meals" endpoint accepts GET, POST, and PUT request. For GET request,    #
+#  this endpoint does not need any parameters and returns all the meals's info.   #
+#  For the POST and PUT request, we need the appropriate JSON format for the      #
+#  the request.                                                                   #
+# NOTICE: Do we need the DELETE request for this endpoint?
 #---------------------------------------------------------------------------------#
 
 api.add_resource(Recipes, '/api/v2/recipes')
 #  * The get_recipes endpoint accepts only get request and return all associate   #
 #   info. This endpoint requires one parameter named "meal_uid".                  #
 api.add_resource(Ingredients, '/api/v2/ingredients')
-#  * The get_new_ingredients endpoint accepts only get request and return all     #
-#  associate info. This endpoint does not require any parameter.                  #
+#  * The "Ingredients" endpoint accepts GET, POST, and PUT request. For GET       #
+#  request, this endpoint does not need any parameters and returns all the meals's#
+#  info. For the POST and PUT request, we need the appropriate JSON format for the#
+#  the request.                                                                   #
+# NOTICE: Do we need the DELETE request for this endpoint?                        #
 api.add_resource(Measure_Unit, '/api/v2/measure_unit')
-
+#  * The "Measure_Unit" endpoint accepts GET, POST, and PUT request. For GET
+#  request, this endpoint does not need any parameters and returns all the        #
+#  measure unit's info. For the POST and PUT request, we need the appropriate JSON#
+#  format for the the request.                                                    #
+# NOTICE: Do we need the DELETE request for this endpoint?                        #
 #-------------------------------- Plan / Coupon pages ----------------------------#
-api.add_resource(Coupon, '/api/v2/coupons')
 #  * The user can access /api/v2/plans endpoint to get all Plans.                 #
-#  * The get_coupon endpoint accepts only GET request with a required argument    #
-#  ("business_uid"). This endpoint will returns all active coupons in the COUPON  #
-#  table.                                                                         #
+#  * The "Coupons" endpoint accepts GET, POST, PUT and DELETE requestS. The GET   #
+#  request does not require any parameter. POST, and PUT request require an       #
+# appropriate JSON objects and the DELETE request requires "coupon_uid" as the    #
+# required parameter.                                                             #
+api.add_resource(Coupons, '/api/v2/coupons')
 #---------------------------------------------------------------------------------#
 #  * The Get_Orders_By_Purchase_id endpoint accepts only GET request without any  #
-#  parameters. It will return meal orders based on the purchase_uid.              #
+#  parameters.                                                                    #
 api.add_resource(Ordered_By_Date, '/api/v2/ordered_by_date')
 #  * The "Ingredients_Need accepts only get request and return all associate info.#
-#  This endpoint requires one parameter named "business_uid".                     #
+#  This endpoint does not require any parameter.                                  #
 api.add_resource(Ingredients_Need, '/api/v2/ingredients_need')
 
 #**********************************************************************************#
