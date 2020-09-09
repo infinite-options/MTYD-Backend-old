@@ -1231,6 +1231,8 @@ class Coupons(Resource):
         try:
             conn = connect()
             query = """
+                    #  ADMIN QUERY 7: 
+                    # PLANS & COUPONS  2. SHOW ALL COUPONS
                     SELECT * FROM sf.coupons;
                     """
             return simple_get_execute(query, __class__.__name__, conn)
