@@ -389,7 +389,6 @@ class Login (Resource):
                             customer_first_name,
                             customer_email, 	
                             password_hashed, 	
-                            password_salt,
                             email_verified, 	
                             user_social_media,
                             user_access_token,
@@ -413,9 +412,7 @@ class Login (Resource):
                     return BadRequest("Bad request.")
                 # compare passwords if user_social_media is false
                 elif (res[0]['result'][0]['user_social_media'] == 'FALSE' or res[0]['result'][0]['user_social_media']=="") and password is not None:
-                    salt = res[0]['result'][0]['password_salt']
-                    hashed = sha512((password + salt).encode()).hexdigest()
-                    if res[0]['result'][0]['password_hashed'] != hashed:
+                    if res[0]['result'][0]['password_hashed'] != password:
                         response['message'] = "Wrong password."
                         return response, 401
                     if (int(res[0]['result'][0]['email_verified']) == 0) or (res[0]['result'][0]['email_verified'] == "FALSE"):
@@ -435,7 +432,7 @@ class Login (Resource):
                     return response, 500
 
                 del res[0]['result'][0]['password_hashed']
-                del res[0]['result'][0]['password_salt']
+                del res[0]['result'][0]['email_verified']
 
                 response['message'] = "Authenticated success."
                 response['result'] = res[0]['result'][0]
@@ -544,7 +541,7 @@ class AccountSalt(Resource):
             conn = connect()
             email = request.args['email']
             query = """
-                    SELECT password_hashed, 
+                    SELECT password_algorithm, 
                             password_salt 
                     FROM customers cus
                     WHERE customer_email = \'""" + email + """\';
