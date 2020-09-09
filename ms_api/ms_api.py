@@ -504,6 +504,33 @@ class Get_Latest_Purchases_Payments(Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+class Next_Billing_Date(Resource):
+    def get(self):
+        try:
+            conn = connect()
+            customer_uid = request.args['customer_uid']
+            query = """
+                        # CUSTOMER QUERY 5: NEXT SUBSCRIPTION BILLING DATE (WITH TRUE_SKIPS)
+                        SELECT *,
+                            IF (nbd.true_skips > 0,
+                            ADDDATE(nbd.start_delivery_date, (nbd.num_issues + nbd.true_skips) * 7 / nbd.deliveries_per_week - 3),
+                            ADDDATE(nbd.start_delivery_date, (nbd.num_issues +        0      ) * 7 / nbd.deliveries_per_week - 3) ) AS next_billing_date
+                        FROM (
+                            SELECT lplpibr.*,
+                                si.*,
+                                ts.true_skips
+                            FROM sf.lplp_items_by_row AS lplpibr
+                            LEFT JOIN sf.subscription_items si
+                                ON lplpibr.lplpibr_jt_item_uid = si.item_uid
+                            LEFT JOIN sf.true_skips AS ts
+                                ON lplpibr.lplpibr_purchase_id = ts.d_purchase_id) AS nbd
+                        WHERE lplpibr_customer_uid = '""" + customer_uid + """';
+                        """
+            return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
 
 class Next_Addon_Charge(Resource):
     def get(self):
@@ -1438,6 +1465,9 @@ api.add_resource(Get_Latest_Purchases_Payments, '/api/v2/customer_lplp')
 #  * The "Get_Latest_Purchases_Payments" only accepts GET request with 1 required#
 #  parameters ("customer_uid"). It will return the information of all current    #
 #  purchases of the customer associated with the given customer_uid.
+api.add_resource(Next_Billing_Date, '/api/v2/next_billing_date')
+#  * The "next_addon_charge" only accepts GET request without any parameter. It  #
+# will return the next addon charge information.                                 #
 api.add_resource(Next_Addon_Charge, '/api/v2/next_addon_charge')
 #  * The "next_addon_charge" only accepts GET request without any parameter. It  #
 # will return the next addon charge information.                                 #
