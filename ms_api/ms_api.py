@@ -184,7 +184,7 @@ def simple_get_execute(query, name_to_show, conn):
         response['message'] = 'Internal Server Error.'
         return response, 500
     elif not res['result']:
-        response['message'] = 'Not Found'
+        response['message'] = 'Can not found the requested info.'
         return response, 404
     else:
         response['message'] = "Get " + name_to_show + " successful."
@@ -349,6 +349,7 @@ class SignUp(Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+
 # confirmation page
 @app.route('/api/v2/confirm/<token>/<hashed>', methods=['GET'])
 def confirm(token, hashed):
@@ -360,8 +361,7 @@ def confirm(token, hashed):
         update = execute(query, 'post', conn)
         if update.get('code') == 281:
             # redirect to login page
-            # return redirect('http://preptoyourdoor.netlify.app/login/{}/{}'.format(email, hashed))
-            return redirect('http://localhost:3000/login/{}/{}'.format(email, hashed))
+            return redirect('http://localhost:3000/login?email={}&hased={}'.format(email, hashed))
         else:
             print("Error happened while confirming an email address.")
             error = "Confirm error."
