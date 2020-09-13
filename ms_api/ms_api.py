@@ -610,6 +610,8 @@ class Checkout(Resource):
             cc_cvv = data['cc_cvv']
             cc_zip = data['cc_zip']
 
+            amount_must_paid = float(amount_due) - float(amount_paid) - float(amount_discount)
+
             # We should sanitize the variable before writting into database.
             # must pass these check first
             if items == "'[]'":
@@ -656,13 +658,18 @@ class Checkout(Resource):
             try:
                 # create a token for stripe
                 card_dict = {"number": data['cc_num'], "exp_month": int(data['cc_exp_month']), "exp_year": int(data['cc_exp_year']),"cvc": data['cc_cvv']}
+                stripe_charge = {}
                 try:
                     card_token = stripe.Token.create(card=card_dict)
-                    stripe_charge = stripe.Charge.create(
-                        amount=int(round(float(amount_paid)*100, 0)),
-                        currency="usd",
-                        source=card_token,
-                        description="Charge customer %s for %s" %(data['delivery_first_name'] + " " + data['delivery_last_name'], data['items']))
+
+                    if int(amount_must_paid) > 0:
+                        print("Here")
+                        stripe_charge = stripe.Charge.create(
+                            amount=int(round(amount_must_paid*100, 0)),
+                            currency="usd",
+                            source=card_token,
+                            description="Charge customer for new Subscription")
+
                 except stripe.error.CardError as e:
                     # Since it's a decline, stripe.error.CardError will be caught
                     response['message'] = e.error.message
