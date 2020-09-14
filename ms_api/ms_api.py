@@ -663,13 +663,13 @@ class Checkout(Resource):
                     card_token = stripe.Token.create(card=card_dict)
 
                     if int(amount_must_paid) > 0:
-                        print("Here")
                         stripe_charge = stripe.Charge.create(
                             amount=int(round(amount_must_paid*100, 0)),
                             currency="usd",
                             source=card_token,
                             description="Charge customer for new Subscription")
-
+                    # update amount_paid. At this point, the payment has been processed so amount_paid == amount_due
+                    amount_paid = amount_due
                 except stripe.error.CardError as e:
                     # Since it's a decline, stripe.error.CardError will be caught
                     response['message'] = e.error.message
