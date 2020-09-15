@@ -108,7 +108,9 @@ def serializeResponse(response):
                 elif isinstance(row[key], bytes):
                     row[key] = row[key].decode()
                 elif (type(row[key]) is date or type(row[key]) is datetime) and row[key] is not None:
-                    row[key] = row[key].strftime("%Y-%m-%d")
+                    #Change this back when finished testing to get only date
+                    #row[key] = row[key].strftime("%Y-%m-%d")
+                    row[key] = row[key].strftime("%Y-%m-%d %H-%M-%S")
         return response
     except:
         raise Exception("Bad query JSON")
@@ -459,11 +461,29 @@ class Meals_Selected(Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
-
+class Upcoming_Menu_Date(Resource):
+    def get(self):
+        try:
+            conn = connect()
+            menu_date = request.args['menu_date']
+            query = """
+                    # CUSTOMER QUERY 4: UPCOMING MENUS
+                    SELECT * FROM sf.menu
+                    LEFT JOIN sf.meals m
+                        ON menu.menu_meal_id = m.meal_uid
+                    -- WHERE menu_date > CURDATE();
+                    WHERE menu_date = '""" + menu_date + """';
+                    """
+            return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
 class Get_Upcoming_Menu(Resource):
     def get(self):
         try:
             conn = connect()
+            # menu_date = request.args['menu_date']
             query = """
                     # CUSTOMER QUERY 4: UPCOMING MENUS
                     SELECT * FROM sf.menu
