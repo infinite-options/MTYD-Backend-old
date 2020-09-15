@@ -465,20 +465,19 @@ class Upcoming_Menu_Date(Resource):
     def get(self):
         try:
             conn = connect()
-            menu_date = request.args['menu_date']
+
             query = """
-                    # CUSTOMER QUERY 4: UPCOMING MENUS
-                    SELECT * FROM sf.menu
-                    LEFT JOIN sf.meals m
-                        ON menu.menu_meal_id = m.meal_uid
-                    -- WHERE menu_date > CURDATE();
-                    WHERE menu_date = '""" + menu_date + """';
+                    # CUSTOMER QUERY 4A: UPCOMING MENUS 
+                    SELECT DISTINCT menu_date  
+                    FROM sf.menu WHERE menu_date > CURDATE() 
+                        AND menu_date <= ADDDATE(CURDATE(), 43);
                     """
             return simple_get_execute(query, __class__.__name__, conn)
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+
 class Get_Upcoming_Menu(Resource):
     def get(self):
         try:
@@ -1488,6 +1487,9 @@ api.add_resource(Meals_Selected, '/api/v2/meals_selected')
 # "customer_id".It will return the information of all selected meals and addons  #
 # which are associated with the specific purchase.                               #
 api.add_resource(Get_Upcoming_Menu, '/api/v2/upcoming_menu' )
+#  * The "Get_Upcoming_Menu" only accepts GET request without required param.    #
+# It will return the information of all upcoming menu items.                     #
+api.add_resource(Upcoming_Menu_Date, '/api/v2/upcoming_menu_date' )
 #  * The "Get_Upcoming_Menu" only accepts GET request without required param.    #
 # It will return the information of all upcoming menu items.                     #
 api.add_resource(Get_Latest_Purchases_Payments, '/api/v2/customer_lplp')
