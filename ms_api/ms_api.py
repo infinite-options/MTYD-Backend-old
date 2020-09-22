@@ -352,6 +352,7 @@ class SignUp(Resource):
             if social_signup == False:
                 token = s.dumps(email)
                 msg = Message("Email Verification", sender='ptydtesting@gmail.com', recipients=[email])
+                # link = url_for('confirm', token=token, hashed=password, _external=True)
                 link = url_for('confirm', token=token, hashed=password, _external=True)
                 msg.body = "Click on the link {} to verify your email address.".format(link)
                 mail.send(msg)
@@ -365,17 +366,21 @@ class SignUp(Resource):
             disconnect(conn)
 
 # confirmation page
-@app.route('/api/v2/confirm/<token>/<hashed>', methods=['GET'])
-def confirm(token, hashed):
+@app.route('/api/v2/confirm', methods=['GET'])
+def confirm():
     try:
+        token = request.args['token']
+        hashed = request.args['hashed']
+
         email = s.loads(token)  # max_age = 86400 = 1 day
+
         # marking email confirmed in database, then...
         conn = connect()
-        query = """UPDATE customers SET email_verified = 1 WHERE email = \'""" + email + """\';"""
+        query = """UPDATE customers SET email_verified = 1 WHERE customer_email = \'""" + email + """\';"""
         update = execute(query, 'post', conn)
         if update.get('code') == 281:
             # redirect to login page
-            return redirect('http://localhost:3000/login?email={}&hased={}'.format(email, hashed))
+            return redirect('http://localhost:3000/?email={}&hashed={}'.format(email, hashed))
         else:
             print("Error happened while confirming an email address.")
             error = "Confirm error."
@@ -411,7 +416,6 @@ class Login (Resource):
                     -- WHERE customer_email = "1m4kfun@gmail.com";
                     WHERE customer_email = \'""" + email + """\';
                     """
-            print('query: ', query)
             res = simple_get_execute(query, __class__.__name__, conn)
             if res[1] == 500:
                 response['message'] = "Internal Server Error."
