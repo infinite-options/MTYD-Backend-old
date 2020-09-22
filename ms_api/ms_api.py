@@ -309,6 +309,7 @@ class SignUp(Resource):
                                         password_algorithm,
                                         referral_source,
                                         role,
+                                        email_verified,
                                         user_social_media,
                                         user_access_token,
                                         user_refresh_token
@@ -333,7 +334,8 @@ class SignUp(Resource):
                                         """ + str(algorithm) + """,
                                         '""" + str(referral) + """',
                                         '""" + str(role) + """',
-                                        """ + str(user_social_signup) + """,
+                                        FALSE,
+                                        '""" + str(user_social_signup) + """',
                                         """ + str(access_token) + """,
                                         """ + str(refresh_token) + """
                                     );
@@ -456,6 +458,93 @@ class Login (Resource):
                 response['message'] = "Authenticated success."
                 response['result'] = res[0]['result'][0]
                 return response, 200
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+class Change_Password(Resource):
+    def post(self):
+        response = {}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+
+            customer_uid = data['customer_uid']
+            old_pass = data['old_password']
+            new_pass = data['new_password']
+            query = """
+                        SELECT customer_email, password_hashed, password_salt, password_algorithm
+                        FROM customers WHERE customer_uid = '""" + customer_uid + """';
+                    """
+            query_res = simple_get_execute(query, "CHANGE PASSWORD QUERY", conn)
+            if query_res[1] != 200:
+                return query_res
+            # because the front end will send back plain password, We need to salt first
+            # checking for identity
+            old_salt = query_res[0]['result'][0]['password_salt']
+            old_password_hashed = sha512((old_pass + old_salt).encode()).hexdigest()
+            if old_password_hashed != query_res[0]['result'][0]['password_hashed']:
+                response['message'] = "Wrong Password"
+                return response, 401
+            # create a new salt and hashing the new password
+            new_salt = getNow()
+            algorithm = query_res[0]['result'][0]['password_algorithm']
+            if algorithm == "SHA512" or algorithm is None or algorithm == "":
+                new_password_hashed = sha512((new_pass + new_salt).encode()).hexdigest()
+            else: # if we have saved the hashing algorithm in our database,
+                response['message'] = "Cannot change Password. Need the algorithm to hashed the new password."
+                return response, 500
+            update_query = """
+                            UPDATE customers SET password_salt = '""" + new_salt + """', 
+                                password_hashed = '""" + new_password_hashed + """'
+                                WHERE customer_uid = '""" + customer_uid + """';
+                            """
+            update_query_res = simple_post_execute([update_query], ["UPDATE PASSWORD"], conn )
+            if update_query_res[1] != 201:
+                return update_query_res
+            response['message'] = "Password updated."
+            return response, 201
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+class Reset_Password(Resource):
+    def get_random_string(self, stringLength=8):
+        lettersAndDigits = string.ascii_letters + string.digits
+        return "".join([random.choice(lettersAndDigits) for i in range(stringLength)])
+
+    def get(self):
+        response = {}
+        try:
+            conn = connect()
+            # search for email;
+            email = request.args['email']
+
+            query = """SELECT * FROM customers
+                    WHERE customer_email ='""" + email + "';"
+            customer_lookup = simple_get_execute(query, "RESET PASSWORD QUERY", conn)
+            if customer_lookup[1] != 200:
+                return customer_lookup
+
+            customer_uid = customer_lookup[0]['result'][0]['customer_uid']
+            pass_temp = self.get_random_string()
+            salt = getNow()
+            pass_temp_hashed = sha512((pass_temp + salt).encode()).hexdigest()
+            query = """UPDATE customers SET password_hashed = '""" + pass_temp_hashed + """'
+                         , password_salt = '""" + salt + "' WHERE customer_uid = '" + customer_uid + "';"
+            # update database with temp password
+            query_result = simple_post_execute([query], ["UPDATE RESET PASSWORD"], conn)
+            if query_result[1]!= 201:
+                return query_result
+            # send an email to client
+            msg = Message(
+                "Email Verification", sender='ptydtesting@gmail.com', recipients=[email])
+            msg.body = "Your temporary password is {}. Please use it to reset your password".format(pass_temp)
+            mail.send(msg)
+            response['message'] = "A temporary password has been sent"
+            return response, 200
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
@@ -1671,7 +1760,7 @@ class Ingredients_Need (Resource):
 
 
 
-#---------------------------- Signup/ Login page --------------------------------#
+#--------------------- Signup/ Login page / Change Password ---------------------#
 api.add_resource(SignUp, '/api/v2/signup')
 #  * The "signup" endpoint accepts only POST request with appropriate named      #
 #  parameters. Please check the documentation for the right format of those named#
@@ -1682,6 +1771,9 @@ api.add_resource(Login, '/api/v2/login')
 # or "refresh_token". We are gonna re-use the token we got from facebook or      #
 # google for our site and we'll pick the refresh token because it will not       #
 # expire.                                                                        #
+api.add_resource(Change_Password, '/api/v2/change_password')
+
+api.add_resource(Reset_Password, '/api/v2/reset_password')
 #--------------------------------------------------------------------------------#
 
 #---------------------------- Select Meal plan pages ----------------------------#
