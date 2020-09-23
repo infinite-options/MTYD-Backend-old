@@ -532,8 +532,11 @@ class Reset_Password(Resource):
             pass_temp = self.get_random_string()
             salt = getNow()
             pass_temp_hashed = sha512((pass_temp + salt).encode()).hexdigest()
-            query = """UPDATE customers SET password_hashed = '""" + pass_temp_hashed + """'
-                         , password_salt = '""" + salt + "' WHERE customer_uid = '" + customer_uid + "';"
+            query = """
+                    UPDATE customers SET password_hashed = '""" + pass_temp_hashed + """'
+                     , password_salt = '""" + salt + """' 
+                     WHERE customer_uid = '""" + customer_uid + """';
+                    """
             # update database with temp password
             query_result = simple_post_execute([query], ["UPDATE RESET PASSWORD"], conn)
             if query_result[1]!= 201:
@@ -571,7 +574,6 @@ class Upcoming_Menu_Date(Resource):
     def get(self):
         try:
             conn = connect()
-
             query = """
                     # CUSTOMER QUERY 4A: UPCOMING MENUS 
                     SELECT DISTINCT menu_date  
@@ -706,10 +708,11 @@ class AccountSalt(Resource):
 
 class Checkout(Resource):
     def post(self):
-        reply = {}
+        response = {}
         try:
             conn = connect()
             data = request.get_json(force=True)
+
             customer_uid = data['customer_uid']
             business_uid = data['business_uid']
             delivery_first_name = data['delivery_first_name']
@@ -735,7 +738,6 @@ class Checkout(Resource):
             cc_exp_date = data['cc_exp_year'] + data['cc_exp_month'] + "01"
             cc_cvv = data['cc_cvv']
             cc_zip = data['cc_zip']
-
             amount_must_paid = float(amount_due) - float(amount_paid) - float(amount_discount)
 
             # We should sanitize the variable before writting into database.
@@ -794,9 +796,7 @@ class Checkout(Resource):
                             currency="usd",
                             source=card_token,
                             description="Charge customer for new Subscription")
-                        print("strip_charge: ", stripe_charge)
                     # update amount_paid. At this point, the payment has been processed so amount_paid == amount_due
-
                     amount_paid = amount_due
                 except stripe.error.CardError as e:
                     # Since it's a decline, stripe.error.CardError will be caught
@@ -822,7 +822,6 @@ class Checkout(Resource):
                 thurs = datetime.now() + timedelta(days=(3 - dayOfWeek) % 7)
 
                 # If today is Thursday after 4PM'
-
                 if thurs.date() == datetime.now().date() and datetime.now().hour >= 16:
                     thurs += timedelta(days=7)
 
