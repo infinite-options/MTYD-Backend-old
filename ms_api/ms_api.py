@@ -423,7 +423,7 @@ class Login (Resource):
                 response['message'] = "Internal Server Error."
                 return response, 500
             elif res[1] == 404:
-                response['message'] = 'Not Found'
+                response['message'] = 'Email Not Found'
                 return response, 404
             else:
                 if password is not None and res[0]['result'][0]['user_social_media'] == 'TRUE':
