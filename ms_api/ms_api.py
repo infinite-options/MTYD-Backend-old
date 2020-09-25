@@ -242,6 +242,7 @@ class SignUp(Resource):
 
             referral = data['referral_source']
             role = data['role']
+
             if data.get('social') is None or data.get('social') == "FALSE" or data.get('social') == False:
                 social_signup = False
             else:
@@ -286,7 +287,7 @@ class SignUp(Resource):
                 salt = 'NULL'
                 password = 'NULL'
                 algorithm = 'NULL'
-                user_social_signup = "'" + data['social'] + "'"
+                user_social_signup = data['social']
             # write everything to database
             customer_insert_query = ["""
                                     INSERT INTO customers 
