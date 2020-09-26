@@ -275,6 +275,7 @@ class SignUp(Resource):
 
             if social_signup == False:
                 salt = getNow()
+                hashed = sha512((data['password'] + salt).encode()).hexdigest()
                 password = "'" + sha512((data['password'] + salt).encode()).hexdigest() + "'"
                 algorithm = "'SHA512'"
                 salt = "'" + salt + "'"
@@ -356,7 +357,8 @@ class SignUp(Resource):
                 token = s.dumps(email)
                 msg = Message("Email Verification", sender='ptydtesting@gmail.com', recipients=[email])
                 # link = url_for('confirm', token=token, hashed=password, _external=True)
-                link = url_for('confirm', token=token, hashed=password, _external=True)
+
+                link = url_for('confirm', token=token, hashed=hashed, _external=True)
                 msg.body = "Click on the link {} to verify your email address.".format(link)
                 mail.send(msg)
             return response
@@ -374,7 +376,7 @@ def confirm():
     try:
         token = request.args['token']
         hashed = request.args['hashed']
-
+        print("hased: ", hashed)
         email = s.loads(token)  # max_age = 86400 = 1 day
 
         # marking email confirmed in database, then...
@@ -383,7 +385,7 @@ def confirm():
         update = execute(query, 'post', conn)
         if update.get('code') == 281:
             # redirect to login page
-            return redirect('http://localhost:3000/?email={}&hashed={}'.format(email, hashed))
+            return redirect('https://mealtoyourdoor.netlify.app/?email={}&hashed={}'.format(email, hashed))
         else:
             print("Error happened while confirming an email address.")
             error = "Confirm error."
@@ -428,13 +430,13 @@ class Login (Resource):
                 return response, 404
             else:
                 user_social_media = res[0]['result'][0]['user_social_media']
-                if password is not None and (user_social_media is not None and user_social_media != 'NULL'):
+                if password is not None and user_social_media is not None:
                     response['message'] = "Need to login by Social Media"
                     return response, 401
-                elif (password is None and refresh_token is None) or (password is None and user_social_media == 'NULL' and user_social_media is None):
+                elif (password is None and refresh_token is None) or (password is None and user_social_media is None):
                     return BadRequest("Bad request.")
                 # compare passwords if user_social_media is false
-                elif (user_social_media == 'NULL' and user_social_media is None) and password is not None:
+                elif user_social_media is None and password is not None:
                     if res[0]['result'][0]['password_hashed'] != password:
                         response['message'] = "Wrong password."
                         return response, 401
