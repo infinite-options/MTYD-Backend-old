@@ -280,14 +280,14 @@ class SignUp(Resource):
                 salt = "'" + salt + "'"
                 access_token = 'NULL'
                 refresh_token = 'NULL'
-                user_social_signup = 'FALSE'
+                user_social_signup = 'NULL'
             else:
                 access_token = "'" + data['access_token'] + "'"
                 refresh_token = "'" + data['refresh_token'] + "'"
                 salt = 'NULL'
                 password = 'NULL'
                 algorithm = 'NULL'
-                user_social_signup = data['social']
+                user_social_signup = "'" + data['social'] + "'"
             # write everything to database
             customer_insert_query = ["""
                                     INSERT INTO customers 
@@ -336,7 +336,7 @@ class SignUp(Resource):
                                         '""" + str(referral) + """',
                                         '""" + str(role) + """',
                                         FALSE,
-                                        '""" + str(user_social_signup) + """',
+                                        """ + str(user_social_signup) + """,
                                         """ + str(access_token) + """,
                                         """ + str(refresh_token) + """
                                     );
@@ -427,13 +427,14 @@ class Login (Resource):
                 response['message'] = 'Email Not Found'
                 return response, 404
             else:
-                if password is not None and res[0]['result'][0]['user_social_media'] == 'TRUE':
+                user_social_media = res[0]['result'][0]['user_social_media']
+                if password is not None and (user_social_media is not None and user_social_media != 'NULL'):
                     response['message'] = "Need to login by Social Media"
                     return response, 401
-                elif (password is None and refresh_token is None) or (password is None and res[0]['result'][0]['user_social_media'] == 'FALSE'):
+                elif (password is None and refresh_token is None) or (password is None and user_social_media == 'NULL' and user_social_media is None):
                     return BadRequest("Bad request.")
                 # compare passwords if user_social_media is false
-                elif (res[0]['result'][0]['user_social_media'] == 'FALSE' or res[0]['result'][0]['user_social_media']=="") and password is not None:
+                elif (user_social_media == 'NULL' and user_social_media is None) and password is not None:
                     if res[0]['result'][0]['password_hashed'] != password:
                         response['message'] = "Wrong password."
                         return response, 401
@@ -441,7 +442,7 @@ class Login (Resource):
                         response['message'] = "Account need to be verified by email."
                         return response, 401
                 # compare the refresh token because it never expire.
-                elif (res[0]['result'][0]['user_social_media']) == 'TRUE':
+                elif (user_social_media != 'NULL' and user_social_media is not None):
                     if (res[0]['result'][0]['user_refresh_token'] != refresh_token):
                         response['message'] = "Cannot Authenticated. Token is invalid."
                         return response, 401
