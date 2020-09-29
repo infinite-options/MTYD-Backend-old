@@ -467,6 +467,25 @@ class Login (Resource):
         finally:
             disconnect(conn)
 
+class AppleLogin (Resource):
+    def post(self):
+        try:
+            token = request.form.get('id_token')
+            if token:
+                data = jwt.decode(token, verify=False)
+                email = data['email']
+                key = 'secret'
+                # create our own token to compare with our record in database.
+                sending_token = jwt.encode({"customer_email": email}, key, algorithm='HS256').decode('UTF-8')
+                return redirect("http://127.0.0.1:3000/?email={}&token={}".format(email, sending_token))
+            else:
+                response = {
+                    "message": "Token not found in Apple's Response"
+                }
+                return response, 400
+        except:
+            raise BadRequest("Request failed, please try again later.")
+
 class Change_Password(Resource):
     def post(self):
         response = {}
@@ -1215,7 +1234,6 @@ class Menu (Resource):
 
 class Meals (Resource):
     def get(self):
-        response = {}
         try:
             conn = connect()
             query = """
@@ -1747,24 +1765,6 @@ class Ingredients_Need (Resource):
 # Define API routes
 # Customer APIs
 
-class AppleLogin (Resource):
-    def post(self):
-        try:
-            token = request.form.get('id_token')
-            if token:
-                data = jwt.decode(token, verify=False)
-                email = data['email']
-                key = 'secret'
-                # create our own token to compare with our record in database.
-                sending_token = jwt.encode({"customer_email": email}, key, algorithm='HS256').decode('UTF-8')
-                return redirect("http://127.0.0.1:3000/?email={}&token={}".format(email, sending_token))
-            else:
-                response = {
-                    "message": "Token not found in Apple's Response"
-                }
-                return response, 400
-        except:
-            raise BadRequest("Request failed, please try again later.")
 
 #--------------------- Signup/ Login page / Change Password ---------------------#
 api.add_resource(SignUp, '/api/v2/signup')

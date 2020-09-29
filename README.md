@@ -11,9 +11,9 @@ _To run the server in local machine, please make sure to install all dependencie
 
 **>>> SignUp: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/signup**
 
-- The "signup" endpoint accepts only POST request with body contains a required JSON object as following:
+  - The "signup" endpoint accepts only POST request with body contains a required JSON object as following:
 
-  *--> Example JSON object for Sign up by email: <--*
+   _--> Example JSON object for Sign up by email: <--_
 
     {
       "email":"example@gmail.com",
@@ -33,8 +33,8 @@ _To run the server in local machine, please make sure to install all dependencie
       "social": false
     }
 
- *--> Example JSON object for Sign up by social media (example object is using GOOGLE)<--*
-
+   *--> Example JSON object for Sign up by social media (example object is using GOOGLE)<--*
+    
     {
       "email":
       "example@gmail.com",
@@ -182,11 +182,11 @@ _To run the server in local machine, please make sure to install all dependencie
 
   ```
   {
-  "is_addon": false,
-  "items":[{"qty": "", "name": "SKIP", "price": "", "item_uid": "320-000002"}],
-  "purchase_id": "400-000024",
-  "menu_date":"2020-08-09",
-  "delivery_day": "SKIP"
+    "is_addon": false,
+    "items":[{"qty": "", "name": "SKIP", "price": "", "item_uid": "320-000002"}],
+    "purchase_id": "400-000024",
+    "menu_date":"2020-08-09",
+    "delivery_day": "SKIP"
   }
   ```
 
@@ -194,11 +194,11 @@ _To run the server in local machine, please make sure to install all dependencie
 
   ```
   {
-  "is_addon": true,
-  "items":[{"qty": "5", "name": "Collards (bunch)", "price": "2.5", "item_uid": "310-000022"}, {"qty": "6", "name": "Broccoli (bunch)", "price": "3.5", "item_uid": "310-000023"}],
-  "purchase_id": "400-000024",
-  "menu_date":"2020-08-09",
-  "delivery_day": "Sunday"
+    "is_addon": true,
+    "items":[{"qty": "5", "name": "Collards (bunch)", "price": "2.5", "item_uid": "310-000022"}, {"qty": "6", "name": "Broccoli (bunch)", "price": "3.5", "item_uid": "310-000023"}],
+    "purchase_id": "400-000024",
+    "menu_date":"2020-08-09",
+    "delivery_day": "Sunday"
   }
   ```
 
@@ -208,4 +208,4 @@ _To run the server in local machine, please make sure to install all dependencie
 
 # ms_api_test
 
-_This is a automatic testing for ms_api.py. This file is broken now because some endpoint have been updated. It need to be fixed before running. It is using Python unit test to implement the test._
+_This is a automatic test for ms_api.py. In order to run this test, the "ms_api.py" must be run at local machine. This test was written by using Python unit test._

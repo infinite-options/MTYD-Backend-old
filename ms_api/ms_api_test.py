@@ -74,10 +74,11 @@ def execute(sql, cmd, conn, skipSerialization=False):
 class FlaskTestCases(unittest.TestCase):
     def test_get_client(self):
         endpoints = [
-            '/api/v2/meals_selected?customer_uid=100-000001',
-            '/api/v2/upcoming_menu',
             '/api/v2/customer_lplp?customer_uid=100-000001',
+            '/api/v2/meals_selected?customer_uid=100-000001',
+            '/api/v2/accountsalt?email=quang@gmail.com',
             '/api/v2/next_addon_charge?purchase_uid=400-000001',
+            '/api/v2/upcoming_menu'
         ]
         for e in endpoints:
             with self.subTest(name=e):
@@ -88,14 +89,15 @@ class FlaskTestCases(unittest.TestCase):
     def test_get_admin(self):
         endpoints = [
             '/api/v2/get_menu',
-            '/api/v2/get_menu?menu_date=2020-08-06',
-            '/api/v2/get_meals',
-            '/api/v2/get_recipes?meal_uid=840-000001',
-            '/api/v2/get_new_ingredients',
-            '/api/v2/get_ingredients_to_purchase?business_uid=200-000001',
-            # '/api/v2/get_coupons',
             '/api/v2/get_orders_by_purchase_id?business_uid=200-000001',
-            '/api/v2/get_orders_by_menu_date?business_uid=200-000001'
+            '/api/v2/plans?business_uid=200-000007',
+            '/api/v2/ingredients',
+            '/api/v2/get_ingredients_to_purchase?business_uid=200-000001',
+            '/api/v2/get_meals',
+            '/api/v2/recipes',
+            '/api/v2/coupons',
+            '/api/v2/get_orders_by_menu_date?business_uid=200-000001',
+            '/api/v2/measure_unit',
         ]
         for e in endpoints:
             with self.subTest(name=e):
@@ -106,7 +108,7 @@ class FlaskTestCases(unittest.TestCase):
     def test_login(self):
         payload = {
             "email": "quang@gmail.com",
-            "password": "1"
+            "password": "cec35d4fc0c5e83527f462aeff579b0c6f098e45b01c8b82e311f87dc6361d752c30293e27027653adbb251dff5d03242c8bec68a3af1abd4e91c5adb799a01b"
         }
         tester = app.test_client()
         response = tester.post('http://localhost:2000/api/v2/login', json=payload)
@@ -114,15 +116,15 @@ class FlaskTestCases(unittest.TestCase):
 
     def test_post_signup_by_email(self):
         payload = {
-                "email": "quangdang0587@gmail.com",
+                "email": "example@gmail.com",
                 "password": "1",
-                "first_name": "Quang",
-                "last_name": "Dang",
-                "address": "1320 144th Ave",
-                "unit": "apt 3",
-                "city": "San Leandro",
-                "state": "CA",
-                "zip_code": "94578",
+                "first_name": "Clark",
+                "last_name": "Kent",
+                "address": "Everywhere",
+                "unit": "",
+                "city": "Krypton",
+                "state": "Space",
+                "zip_code": "12345",
                 "latitude": 123456,
                 "longitude": 12.2154,
                 "phone_number": "5105846166",
@@ -146,22 +148,22 @@ class FlaskTestCases(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
     def test_post_signup_by_social(self):
         payload = {
-            "email": "quangdang@gmail.com",
+            "email": "example@gmail.com",
             "access_token": "this is a access_token",
             "refresh_token": "this is a secret refresh_token",
-            "first_name": "Quang",
-            "last_name": "Dang",
-            "address": "1320 144th Ave",
-            "unit": "apt 3",
-            "city": "San Leandro",
-            "state": "CA",
+            "first_name": "Lex",
+            "last_name": "Luther",
+            "address": "Somewhere on Earth",
+            "unit": "",
+            "city": "Rich",
+            "state": "Millionaire",
             "zip_code": "94578",
             "latitude": 123456,
             "longitude": 12.2154,
-            "phone_number": "5105846166",
-            "referral_source": "Website",
-            "role": "customer",
-            "social": "GOOGLE"
+            "phone_number": "1234567890",
+            "referral_source": "Friends",
+            "role": "boss",
+            "social": "Twitter"
         }
         tester = app.test_client()
         response = tester.post("http://localhost:2000/api/v2/signup", json=payload)
@@ -179,36 +181,33 @@ class FlaskTestCases(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
     def test_post_checkout(self):
         payload = {
-                "customer_uid": "100-000082",
-                "business_id": "200-000001",
-                "items": [{"qty": "5", "name": "Collards (bunch)", "price": "2.5", "item_uid": "310-000022"},
-                          {"qty": "3", "name": "Broccoli (bunch)", "price": "3.5", "item_uid": "310-000023"},
-                          {"qty": "3", "name": "Cauliflower (bunch)", "price": "3.5", "item_uid": "310-000024"},
-                          {"qty": "4", "name": "Iceberg Lettuce (each)", "price": "2.5", "item_uid": "310-000025"}],
-                "salt": "64a7f1fb0df93d8f5b9df14077948afa1b75b4c5028d58326fb801d825c9cd24412f88c8b121c50ad5c62073c75d69f14557255da1a21e24b9183bc584efef71",
-                "delivery_first_name": "Quang",
-                "delivery_last_name": "Dang",
-                "delivery_email": "vinhquangdang1@gmail.com",
-                "delivery_phone": "5105846166",
-                "delivery_address": "1320 144th Ave",
-                "delivery_unit": "",
-                "delivery_city": "San Leandro",
-                "delivery_state": "CA",
-                "delivery_zip": "94578",
-                "delivery_instructions": "Nothing",
-                "delivery_longitude": "0.23243445",
-                "delivery_latitude": "-121.332",
-                "order_instructions": "Nothing",
-                "purchase_notes": "testing",
-                "amount_due": "300.00",
-                "amount_discount": "0.00",
-                "amount_paid": "300.00",
-                "cc_num": "4242424242424242",
-                "cc_exp_year": "2022",
-                "cc_exp_month": "08",
-                "cc_cvv": "123",
-                "cc_zip": "12345"
-        }
+                    "customer_uid": "100-000082",
+                    "business_uid": "200-000001",
+                    "items": [{"qty": "5", "name": "Collards (bunch)", "price": "2.5", "item_uid": "320-000009", "pur_business_uid": "200-000001", "delivery_date": "2020-08-30 12:00:00"}],
+                    "salt": "64a7f1fb0df93d8f5b9df14077948afa1b75b4c5028d58326fb801d825c9cd24412f88c8b121c50ad5c62073c75d69f14557255da1a21e24b9183bc584efef71",
+                    "delivery_first_name": "Quang",
+                    "delivery_last_name": "Dang",
+                    "delivery_email": "vinhquangdang1@gmail.com",
+                    "delivery_phone": "5105846166",
+                    "delivery_address": "1320 144th Ave",
+                    "delivery_unit": "",
+                    "delivery_city": "San Leandro",
+                    "delivery_state": "CA",
+                    "delivery_zip": "94578",
+                    "delivery_instructions": "Nothing",
+                    "delivery_longitude": "0.23243445",
+                    "delivery_latitude": "-121.332",
+                    "order_instructions": "Nothing",
+                    "purchase_notes": "testing",
+                    "amount_due": "300.00",
+                    "amount_discount": "0.00",
+                    "amount_paid": "0.00",
+                    "cc_num": "4242424242424242",
+                    "cc_exp_year": "2022",
+                    "cc_exp_month": "08",
+                    "cc_cvv": "123",
+                    "cc_zip": "12345"
+                }
         tester = app.test_client()
         response = tester.post("http://localhost:2000/api/v2/checkout", json=payload)
         if response.status_code == 201:
@@ -236,13 +235,12 @@ class FlaskTestCases(unittest.TestCase):
 
     def test_post_addon_selection(self):
         payload = {
-            "is_addon": True,
-            "items": [{"qty": "5", "name": "Collards (bunch)", "price": "2.5", "item_uid": "310-000022"},
-                      {"qty": "6", "name": "Broccoli (bunch)", "price": "3.5", "item_uid": "310-000023"}],
-            "purchase_id": "400-000024",
-            "menu_date": "2020-08-09",
-            "delivery_day": "Sunday"
-        }
+                    "is_addon": true,
+                    "items":[{"qty": "5", "name": "Collards (bunch)", "price": "2.5", "item_uid": "310-000022"}, {"qty": "6", "name": "Broccoli (bunch)", "price": "3.5", "item_uid": "310-000023"}],
+                    "purchase_id": "400-000024",
+                    "menu_date":"2020-08-09",
+                    "delivery_day": "Sunday"
+                }
         tester = app.test_client()
         response = tester.post("http://localhost:2000/api/v2/meals_selection", json=payload)
         if response.status_code == 201:
@@ -261,13 +259,12 @@ class FlaskTestCases(unittest.TestCase):
 
     def test_post_meal_selection(self):
         payload = {
-            "is_addon": False,
-            "items": [{"qty": "5", "name": "Collards (bunch)", "price": "2.5", "item_uid": "310-000022"},
-                      {"qty": "6", "name": "Broccoli (bunch)", "price": "3.5", "item_uid": "310-000023"}],
-            "purchase_id": "400-000024",
-            "menu_date": "2020-08-09",
-            "delivery_day": "Sunday"
-        }
+                    "is_addon": False,
+                    "items":[{"qty": "", "name": "SKIP", "price": "", "item_uid": "320-000002"}],
+                    "purchase_id": "400-000024",
+                    "menu_date":"2020-08-09",
+                    "delivery_day": "SKIP"
+                }
         tester = app.test_client()
         response = tester.post("http://localhost:2000/api/v2/meals_selection", json=payload)
         if response.status_code == 201:
