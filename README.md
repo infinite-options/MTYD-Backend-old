@@ -210,4 +210,4 @@ _To run the server in local machine, please make sure to install all dependencie
 
 # ms_api_test
 
-_This is a automatic test for ms_api.py. In order to run this test, the "ms_api.py" must be run at local machine. This test was written by using Python unit test._
+_This is a automatic test for ms_api.py. To run the test, type "python3 ms_api_test.py" in the terminal._
