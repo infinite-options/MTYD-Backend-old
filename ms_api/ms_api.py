@@ -574,21 +574,7 @@ class Meals_Selected(Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
-class Upcoming_Menu_Date(Resource):
-    def get(self):
-        try:
-            conn = connect()
-            query = """
-                    # CUSTOMER QUERY 4A: UPCOMING MENUS 
-                    SELECT DISTINCT menu_date  
-                    FROM sf.menu WHERE menu_date > CURDATE() 
-                        AND menu_date <= ADDDATE(CURDATE(), 43);
-                    """
-            return simple_get_execute(query, __class__.__name__, conn)
-        except:
-            raise BadRequest('Request failed, please try again later.')
-        finally:
-            disconnect(conn)
+
 
 class Get_Upcoming_Menu(Resource):
     def get(self):
@@ -1810,19 +1796,16 @@ api.add_resource(Meals_Selected, '/api/v2/meals_selected')
 api.add_resource(Get_Upcoming_Menu, '/api/v2/upcoming_menu' )
 #  * The "Get_Upcoming_Menu" only accepts GET request without required param.    #
 # It will return the information of all upcoming menu items.                     #
-api.add_resource(Upcoming_Menu_Date, '/api/v2/upcoming_menu_date' )
-#  * The "Get_Upcoming_Menu" only accepts GET request without required param.    #
-# It will return the information of all upcoming menu items.                     #
 api.add_resource(Get_Latest_Purchases_Payments, '/api/v2/customer_lplp')
 #  * The "Get_Latest_Purchases_Payments" only accepts GET request with 1 required#
 #  parameters ("customer_uid"). It will return the information of all current    #
 #  purchases of the customer associated with the given customer_uid.
 api.add_resource(Next_Billing_Date, '/api/v2/next_billing_date')
-#  * The "next_addon_charge" only accepts GET request without any parameter. It  #
-# will return the next addon charge information.                                 #
+#  * The "next_Billing_Date" only accepts GET request with parameter named       #
+#  "customer_uid". It will return the next billing charge information.           #
 api.add_resource(Next_Addon_Charge, '/api/v2/next_addon_charge')
-#  * The "next_addon_charge" only accepts GET request without any parameter. It  #
-# will return the next addon charge information.                                 #
+#  * The "next_addon_charge" only accepts GET request with required parameter    #
+# named "purchase_uid". It will return the next addon charge information.        #
 api.add_resource(AccountSalt, '/api/v2/accountsalt')
 #  * The "accountsalt" endpoint accepts only GET request with one required param. #
 #  It will return the information of password hashed and password salt for an     #
