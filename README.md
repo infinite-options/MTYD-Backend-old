@@ -7,13 +7,13 @@ A website creator which is used for restaurant onwer. The website creator will c
 _Python server contains endpoints that is serving for MTYD website and MTYD mobile. Each endpoint will require specific format which the front end should follow in order to get the right response back._
 _To run the server in local machine, please make sure to install all dependencies which are listed in **requirement.txt** and also we should run it on python virtual environment (after running virtual environment, run **pip3 install -r requirements.txt** to install all dependencies automatically.)_
 
-_The server is hold at: **https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev.** and is updated through **zappa update dev** command (when running on local machine, the lambda's address above will be replaced by **localhost:2000**). Endpoints and its required format are listed as following:_
+*The server is hold at: **https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev.** and is updated through **zappa update dev** command (when running on local machine, the lambda's address above will be replaced by **localhost:2000**). Endpoints and its required format are listed as following:*
 
 **>>> SignUp: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/signup**
 
 - The "signup" endpoint accepts only POST request with body contains a required JSON object as following:
 
-_--> Example JSON object for Sign up by email: <--_
+  *--> Example JSON object for Sign up by email: <--*
 
     {
       "email":"example@gmail.com",
@@ -33,7 +33,7 @@ _--> Example JSON object for Sign up by email: <--_
       "social": false
     }
 
-_--> Example JSON object for Sign up by social media (example object is using GOOGLE)<--_
+ *--> Example JSON object for Sign up by social media (example object is using GOOGLE)<--*
 
     {
       "email":
@@ -79,11 +79,11 @@ _--> Example JSON object for Sign up by social media (example object is using GO
   }
   ```
 
-**>>> AppleLogin, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/api/v2/apple\_login**
+**>>> AppleLogin, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/api/v2/apple_login**
 
 - This endpoint is used by Apple to redirect after authorizing. It accepts POST request with content type as a form-urlencoded which is sent by Apple.
 
-**>>> Change_Password, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/api/v2/change\_password**
+**>>> Change_Password, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/api/v2/change_password**
 
 - This endpoint is used for changing user's password. It accepts only POST request which requires the body of the request be formated as follow:
 
@@ -95,47 +95,47 @@ _--> Example JSON object for Sign up by social media (example object is using GO
   }
   ```
 
-**>>> Reset_Password, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/reset\_password**
+**>>> Reset_Password, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/reset_password**
 
 - This endpoint is used for reset user's password in case they forgot their password. It accepts only GET request which requires a parameter named "email". So, the endpoint will send an email to the user which contains a temporary password for them to reset their password.
 
-  _Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/reset\_password?email=example@gmail.com_
+  *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/reset_password?email=example@gmail.com*
 
 **>>> Meals_Selected, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/meals_selected**
 
 - The "Meals_Selected" only accepts GET request with one required parameters "customer_id".It will return the information of all selected meals and addons which are associated with the specific purchase.
 
-  _Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2//api/v2/meals\_selected?customer\_uid=100-000001_
+  *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2//api/v2/meals_selected?customer\_uid=100-000001*
 
 **>>> Get_Upcoming_Menu, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/upcoming_menu**
 
 - The "Get_Upcoming_Menu" only accepts GET request without required param. It will return the information of all upcoming menu items.
 
-  _Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/upcoming\_menu_
+  *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/upcoming_menu*
 
 **>>> Get_Latest_Purchases_Payments, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/customer_lplp**
 
-- The "Get_Latest_Purchases_Payments" only accepts GET request with 1 required parameters ("customer_uid"). It will return the information of all current purchases of the customer associated with the given customer_uid.
+- The "Get_Latest_Purchases_Payments" only accepts GET request with 1 required parameters "customer_uid". It will return the information of all current purchases of the customer associated with the given customer_uid.
 
-  _Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/customer\_lplp?customer\_uid=100-000001_
+  *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/customer_lplp?customer\_uid=100-000001*
 
 **>>> Next_Billing_Date, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/next_billing_date**
 
 - The "next_Billing_Date" only accepts GET request with parameter named "customer_uid". It will return the next billing charge information.
 
-  _Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/next\_billing\_date?customer\_uid=100-000001_
+  *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/next_billing_date?customer_uid=100-000001*
 
 **>>> Next_Addon_Charge, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/next_addon_charge**
 
 - The "next_addon_charge" only accepts GET request with required parameter named "purchase_uid". It will return the next addon charge information.
 
-  _Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/next\_addon\_charge?purchase\_uid=400-000001_
+  *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/next_addon_charge?purchase_uid=400-000001*
 
 **>>> AccountSalt, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/accountsalt**
 
 - The "accountsalt" endpoint accepts only GET request with one required parameter.It will return the information of password hashed and password salt for an associated email account.
 
-  _Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/accountsalt?email=quang@gmail.com_
+  *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/accountsalt?email=quang@gmail.com*
 
 **>>> Checkout, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/checkout**
 
@@ -172,7 +172,7 @@ _--> Example JSON object for Sign up by social media (example object is using GO
   }
   ```
 
-> **Notice**: For testing purpose, we have to use testing credit card which is listed on stripe's website: https://stripe.com/docs/testing
+> **Notice**: For testing purpose, we have to use testing credit card which is listed on [stripe's website](https://stripe.com/docs/testing)
 
 **>>> Meals_Selection, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/meals_selection'**
 
@@ -208,4 +208,4 @@ _--> Example JSON object for Sign up by social media (example object is using GO
 
 # ms_api_test
 
-_This is a automatic testing for ms\\\_api.py. This file is broken now because some endpoint have been updated. It need to be fixed before running. It is using Python unit test to implement the test._
+_This is a automatic testing for ms_api.py. This file is broken now because some endpoint have been updated. It need to be fixed before running. It is using Python unit test to implement the test._
