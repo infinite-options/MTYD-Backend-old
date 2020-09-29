@@ -7,7 +7,7 @@ A website creator which is used for restaurant onwer. The website creator will c
 _Python server contains endpoints that is serving for MTYD website and MTYD mobile. Each endpoint will require specific format which the front end should follow in order to get the right response back._
 _To run the server in local machine, please make sure to install all dependencies which are listed in **requirement.txt** and also we should run it on python virtual environment (after running virtual environment, run **pip3 install -r requirements.txt** to install all dependencies automatically.)_
 
-*The server is hold at: **https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev.** and is updated through **zappa update dev** command (when running on local machine, the lambda's address above will be replaced by **localhost:2000**). Endpoints and its required format are listed as following:*
+*The server is held at: **https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev** and it is updated through **zappa update dev** command (when running on local machine, the lambda's address above will be replaced by **localhost:2000**). Endpoints and its required format are listed as following:*
 
 **>>> SignUp: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/signup**
 
@@ -57,7 +57,7 @@ _To run the server in local machine, please make sure to install all dependencie
 
 **>>> Login: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/login**
 
-- The "Login" endpoint accepts only POST request with at least 2 parameters in its body. The first param is "email" and the second one is either "password" or "refresh_token". We are gonna re-use the token we got from facebook or google for our site and we'll pick the refresh token because it will not expire. For Apple token, we will use our token which is created by using user's email jwt encoded.
+- The "Login" endpoint accepts only POST request with at least 2 parameters in its body. The first param is "email" and the second one is either "password" or "token". We are gonna re-use the token (refresh\_token) we got from facebook or google for our site. For Apple token, we will use our token which is created by using user's email jwt encoded.
 
   _--> Example JSON object for Login by email:<--_
 
@@ -81,7 +81,7 @@ _To run the server in local machine, please make sure to install all dependencie
 
 **>>> AppleLogin, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/apple_login**
 
-- This endpoint is used by Apple to redirect after authorizing. It accepts POST request with content type as a form-urlencoded which is sent by Apple.
+- This endpoint is used by Apple to redirect after their authorizing. It accepts POST request with content type as a form-urlencoded which is sent by Apple.
 
 **>>> Change_Password, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/change_password**
 
