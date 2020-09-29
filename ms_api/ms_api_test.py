@@ -72,6 +72,7 @@ def execute(sql, cmd, conn, skipSerialization=False):
         return response
 
 class FlaskTestCases(unittest.TestCase):
+    # @unittest.expectedFailure
     def test_get_client(self):
         endpoints = [
             '/api/v2/customer_lplp?customer_uid=100-000001',
@@ -88,16 +89,15 @@ class FlaskTestCases(unittest.TestCase):
 
     def test_get_admin(self):
         endpoints = [
-            '/api/v2/get_menu',
-            '/api/v2/get_orders_by_purchase_id?business_uid=200-000001',
             '/api/v2/plans?business_uid=200-000007',
-            '/api/v2/ingredients',
-            '/api/v2/get_ingredients_to_purchase?business_uid=200-000001',
-            '/api/v2/get_meals',
+            '/api/v2/menu',
+            '/api/v2/meals',
             '/api/v2/recipes',
-            '/api/v2/coupons',
-            '/api/v2/get_orders_by_menu_date?business_uid=200-000001',
+            '/api/v2/ingredients',
             '/api/v2/measure_unit',
+            '/api/v2/coupons',
+            '/api/v2/ordered_by_date',
+            '/api/v2/ingredients_need',
         ]
         for e in endpoints:
             with self.subTest(name=e):
@@ -184,16 +184,16 @@ class FlaskTestCases(unittest.TestCase):
                     "customer_uid": "100-000082",
                     "business_uid": "200-000001",
                     "items": [{"qty": "5", "name": "Collards (bunch)", "price": "2.5", "item_uid": "320-000009", "pur_business_uid": "200-000001", "delivery_date": "2020-08-30 12:00:00"}],
-                    "salt": "64a7f1fb0df93d8f5b9df14077948afa1b75b4c5028d58326fb801d825c9cd24412f88c8b121c50ad5c62073c75d69f14557255da1a21e24b9183bc584efef71",
+                    "salt": "cec35d4fc0c5e83527f462aeff579b0c6f098e45b01c8b82e311f87dc6361d752c30293e27027653adbb251dff5d03242c8bec68a3af1abd4e91c5adb799a01b",
                     "delivery_first_name": "Quang",
                     "delivery_last_name": "Dang",
-                    "delivery_email": "vinhquangdang1@gmail.com",
-                    "delivery_phone": "5105846166",
-                    "delivery_address": "1320 144th Ave",
+                    "delivery_email": "exmaple@gmail.com",
+                    "delivery_phone": "1234567891",
+                    "delivery_address": "Somewhere on Earth",
                     "delivery_unit": "",
-                    "delivery_city": "San Leandro",
+                    "delivery_city": "San Jose",
                     "delivery_state": "CA",
-                    "delivery_zip": "94578",
+                    "delivery_zip": "91200",
                     "delivery_instructions": "Nothing",
                     "delivery_longitude": "0.23243445",
                     "delivery_latitude": "-121.332",
@@ -235,7 +235,7 @@ class FlaskTestCases(unittest.TestCase):
 
     def test_post_addon_selection(self):
         payload = {
-                    "is_addon": true,
+                    "is_addon": True,
                     "items":[{"qty": "5", "name": "Collards (bunch)", "price": "2.5", "item_uid": "310-000022"}, {"qty": "6", "name": "Broccoli (bunch)", "price": "3.5", "item_uid": "310-000023"}],
                     "purchase_id": "400-000024",
                     "menu_date":"2020-08-09",
@@ -260,9 +260,9 @@ class FlaskTestCases(unittest.TestCase):
     def test_post_meal_selection(self):
         payload = {
                     "is_addon": False,
-                    "items":[{"qty": "", "name": "SKIP", "price": "", "item_uid": "320-000002"}],
+                    "items": [{"qty": "", "name": "SKIP", "price": "", "item_uid": "320-000002"}],
                     "purchase_id": "400-000024",
-                    "menu_date":"2020-08-09",
+                    "menu_date": "2020-08-09",
                     "delivery_day": "SKIP"
                 }
         tester = app.test_client()

@@ -473,11 +473,17 @@ class AppleLogin (Resource):
             token = request.form.get('id_token')
             if token:
                 data = jwt.decode(token, verify=False)
-                email = data['email']
-                key = 'secret'
-                # create our own token to compare with our record in database.
-                sending_token = jwt.encode({"customer_email": email}, key, algorithm='HS256').decode('UTF-8')
-                return redirect("http://127.0.0.1:3000/?email={}&token={}".format(email, sending_token))
+                email = data.get('email')
+                if email is not None:
+                    key = 'secret'
+                    # create our own token to compare with our record in database.
+                    sending_token = jwt.encode({"customer_email": email}, key, algorithm='HS256').decode('UTF-8')
+                    return redirect("http://127.0.0.1:3000/?email={}&token={}".format(email, sending_token))
+                else:
+                    response = {
+                        "message": "Not Found user's email in Apple's Token."
+                    }
+                    return response, 400
             else:
                 response = {
                     "message": "Token not found in Apple's Response"

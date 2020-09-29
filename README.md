@@ -148,7 +148,7 @@ _To run the server in local machine, please make sure to install all dependencie
     "customer_uid":"100-000082",
     "business_uid": "200-000001",
     "items": [{"qty": "5", "name": "Collards (bunch)", "price": "2.5", "item_uid":"320-000009", "pur_business_uid":"200-000001", "delivery_date":"2020-08-30 12:00:00"}],
-    "salt": "64a7f1fb0df93d8f5b9df14077948afa1b75b4c5028d58326fb801d825c9cd24412f88c8b121c50ad5c62073c75d69f14557255da1a21e24b9183bc584efef71",
+    "salt": "cec35d4fc0c5e83527f462aeff579b0c6f098e45b01c8b82e311f87dc6361d752c30293e27027653adbb251dff5d03242c8bec68a3af1abd4e91c5adb799a01b"
     "delivery_first_name":"Captain",
     "delivery_last_name":"American",
     "delivery_email":"avenger@gmail.com",
@@ -158,7 +158,7 @@ _To run the server in local machine, please make sure to install all dependencie
     "delivery_city":"Hollywood",
     "delivery_state":"CA",
     "delivery_zip":"12345",
-    "delivery_instructions":"Carefull with Hulk",
+    "delivery_instructions":"Careful with Hulk",
     "delivery_longitude":"0.23243445",
     "delivery_latitude":"-121.332",
     "order_instructions":"Nothing",
@@ -174,9 +174,9 @@ _To run the server in local machine, please make sure to install all dependencie
   }
   ```
 
-> **Notice**: For testing purposes, we have to use testing credit cards which are listed on [stripe's website](https://stripe.com/docs/testing). The property named "salt" in the JSON object above is a user's password hashed. It is required for the user who registered by email only.
+> **Notice**: For testing purposes, we have to use testing credit cards which are listed on [stripe's website](https://stripe.com/docs/testing). The property named "salt" in the JSON object above is a hashed user's password. It is required for the user who registered by email only.
 
-**>>> Meals_Selection, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/meals_selection'**
+**>>> Meals_Selection, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/meals_selection**
 
 - The "Meals_Selection" accepts POST request with appropriate parameters. The JSON object format is shown below:
 
