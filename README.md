@@ -205,3 +205,7 @@ _--> Example JSON object for Sign up by social media (example object is using GO
 > **Notice:** if is_addon: true means that we are selecting for add on, so the sending data will be written into the addon_selected table and if is_addon: false then the sending data will be written into the meals_selected table.
 
 **There are still some endpoints have not completed yet. We will update this README when we have those endpoints tested.**
+
+# ms_api_test
+
+_This is a automatic testing for ms\\\_api.py. This file is broken now because some endpoint have been updated. It need to be fixed before running. It is using Python unit test to implement the test._
