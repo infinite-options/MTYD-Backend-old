@@ -105,7 +105,7 @@ _To run the server in local machine, please make sure to install all dependencie
 
 - The "Meals_Selected" only accepts GET request with one required parameters "customer_id".It will return the information of all selected meals and addons which are associated with the specific purchase.
 
-  *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2//api/v2/meals_selected?customer\_uid=100-000001*
+  *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2//api/v2/meals_selected?customer_uid=100-000001*
 
 **>>> Get_Upcoming_Menu, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/upcoming_menu**
 
@@ -117,7 +117,7 @@ _To run the server in local machine, please make sure to install all dependencie
 
 - The "Get_Latest_Purchases_Payments" only accepts GET request with 1 required parameters "customer_uid". It will return the information of all current purchases of the customer associated with the given customer_uid.
 
-  *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/customer_lplp?customer\_uid=100-000001*
+  *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/customer_lplp?customer_uid=100-000001*
 
 **>>> Next_Billing_Date, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/next_billing_date**
 
@@ -176,7 +176,7 @@ _To run the server in local machine, please make sure to install all dependencie
 
 **>>> Meals_Selection, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/meals_selection'**
 
-- The "Meals\*Selection" accepts POST request with appropriate parameters. The JSON object format is shown below:
+- The "Meals_Selection" accepts POST request with appropriate parameters. The JSON object format is shown below:
 
   _-->Example for meal selection:<--_
 
