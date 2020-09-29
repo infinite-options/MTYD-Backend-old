@@ -172,7 +172,7 @@ _To run the server in local machine, please make sure to install all dependencie
   }
   ```
 
-> **Notice**: For testing purpose, we have to use testing credit card which is listed on [stripe's website](https://stripe.com/docs/testing)
+> **Notice**: For testing purposes, we have to use testing credit cards which are listed on [stripe's website](https://stripe.com/docs/testing). The property named "salt" in the JSON object above is a user's password hashed. It is required for the user who registered by email only.
 
 **>>> Meals_Selection, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/meals_selection'**
 
