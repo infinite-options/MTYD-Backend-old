@@ -79,11 +79,11 @@ _To run the server in local machine, please make sure to install all dependencie
   }
   ```
 
-**>>> AppleLogin, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/api/v2/apple_login**
+**>>> AppleLogin, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/apple_login**
 
 - This endpoint is used by Apple to redirect after authorizing. It accepts POST request with content type as a form-urlencoded which is sent by Apple.
 
-**>>> Change_Password, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/api/v2/change_password**
+**>>> Change_Password, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/change_password**
 
 - This endpoint is used for changing user's password. It accepts only POST request which requires the body of the request be formated as follow:
 
@@ -101,11 +101,13 @@ _To run the server in local machine, please make sure to install all dependencie
 
   *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/reset_password?email=example@gmail.com*
 
+  > **Notice:** For testing, please make sure that you already registered account through by using your email address. Then you should using your email address in the above url in order to receive an email from the server.
+
 **>>> Meals_Selected, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/meals_selected**
 
 - The "Meals_Selected" only accepts GET request with one required parameters "customer_id".It will return the information of all selected meals and addons which are associated with the specific purchase.
 
-  *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2//api/v2/meals_selected?customer_uid=100-000001*
+  *Example GET request: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/meals_selected?customer_uid=100-000001*
 
 **>>> Get_Upcoming_Menu, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/upcoming_menu**
 
