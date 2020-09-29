@@ -15,7 +15,6 @@ _The server is hold at: **https://ht56vci4v9.execute-api.us-west-1.amazonaws.com
 
 _--> Example JSON object for Sign up by email: <--_
 
-    ```
     {
       "email":"example@gmail.com",
       "password":"super_secret",
@@ -33,11 +32,9 @@ _--> Example JSON object for Sign up by email: <--_
       "role":"user's role",
       "social": false
     }
-    ```
 
 _--> Example JSON object for Sign up by social media (example object is using GOOGLE)<--_
 
-    ```
     {
       "email":
       "example@gmail.com",
@@ -57,7 +54,6 @@ _--> Example JSON object for Sign up by social media (example object is using GO
       "role": "user's role",
       "social": "GOOGLE"
     }
-    ```
 
 **>>> Login: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/login**
 
@@ -176,7 +172,7 @@ _--> Example JSON object for Sign up by social media (example object is using GO
   }
   ```
 
-> **Notice**: For testing purpose, we have to use testing credit card which is listed on stripe's website: https://stripe.com/docs/testing - automatic!
+> **Notice**: For testing purpose, we have to use testing credit card which is listed on stripe's website: https://stripe.com/docs/testing
 
 **>>> Meals_Selection, https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/meals_selection'**
 
