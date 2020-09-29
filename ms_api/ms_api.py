@@ -4,7 +4,7 @@ from flask_mail import Mail, Message  # used for email
 # used for serializer email and error handling
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
 from flask_cors import CORS
-
+import jwt
 
 from werkzeug.exceptions import BadRequest, NotFound
 
@@ -199,7 +199,7 @@ def simple_get_execute(query, name_to_show, conn):
         return response, 500
     elif not res['result']:
         response['message'] = 'Can not found the requested info.'
-        return response, 404
+        return response, 204
     else:
         response['message'] = "Get " + name_to_show + " successful."
         response['result'] = res['result']
@@ -425,7 +425,7 @@ class Login (Resource):
             if res[1] == 500:
                 response['message'] = "Internal Server Error."
                 return response, 500
-            elif res[1] == 404:
+            elif res[1] == 204:
                 response['message'] = 'Email Not Found'
                 return response, 404
             else:
@@ -1761,7 +1761,24 @@ class Ingredients_Need (Resource):
 # Define API routes
 # Customer APIs
 
-
+class AppleLogin (Resource):
+    def post(self):
+        try:
+            token = request.form.get('id_token')
+            if token:
+                data = jwt.decode(token, verify=False)
+                email = data['email']
+                key = 'secret'
+                # create our own token to compare with our record in database.
+                sending_token = jwt.encode({"customer_email": email}, key, algorithm='HS256').decode('UTF-8')
+                return redirect("http://127.0.0.1:3000/?email={}&token={}".format(email, sending_token))
+            else:
+                response = {
+                    "message": "Token not found in Apple's Response"
+                }
+                return response, 400
+        except:
+            raise BadRequest("Request failed, please try again later.")
 
 #--------------------- Signup/ Login page / Change Password ---------------------#
 api.add_resource(SignUp, '/api/v2/signup')
@@ -1774,6 +1791,7 @@ api.add_resource(Login, '/api/v2/login')
 # or "refresh_token". We are gonna re-use the token we got from facebook or      #
 # google for our site and we'll pick the refresh token because it will not       #
 # expire.                                                                        #
+api.add_resource(AppleLogin, '/api/v2/apple_login', '/')
 api.add_resource(Change_Password, '/api/v2/change_password')
 
 api.add_resource(Reset_Password, '/api/v2/reset_password')
