@@ -484,7 +484,9 @@ class AppleLogin (Resource):
                     return response, 400
             else:
                 response = {
-                    "message": "Not found token in Apple's Response"
+                    "message": "Not found token "
+                               ""
+                               "in Apple's Response"
                 }
                 return response, 400
         except:
