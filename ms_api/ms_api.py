@@ -840,13 +840,20 @@ class Meals_Selected(Resource):
         try:
             conn = connect()
             customer_uid = request.args['customer_uid']
+            purchase_id = request.args['purchase_id']
+            menu_date = request.args['menu_date']
             query = """
                     # CUSTOMER QUERY 3: ALL MEAL SELECTIONS BY CUSTOMER  (INCLUDES HISTORY)
                     SELECT * FROM sf.latest_combined_meal lcm
                     LEFT JOIN sf.lplp
                         ON lcm.sel_purchase_id = lplp.purchase_id
-                    WHERE pur_customer_uid = '""" + customer_uid + """';
+                    WHERE pur_customer_uid = '""" + customer_uid + """'
+                    and purchase_id = '""" + purchase_id + """'
+                    and sel_menu_date = '""" + menu_date + """';
                     """
+
+
+
             return simple_get_execute(query, __class__.__name__, conn)
         except:
             raise BadRequest('Request failed, please try again later.')
@@ -2531,7 +2538,8 @@ api.add_resource(Reset_Password, '/api/v2/reset_password')
 api.add_resource(Meals_Selected, '/api/v2/meals_selected')
 #  * The "Meals_Selected" only accepts GET request with one required parameters  #
 # "customer_id".It will return the information of all selected meals and addons  #
-# which are associated with the specific purchase.                               #
+# which are associated with the specific purchase. Modified to show specific     #
+# means for specific date                                                        #
 api.add_resource(Get_Upcoming_Menu, '/api/v2/upcoming_menu' )
 #  * The "Get_Upcoming_Menu" only accepts GET request without required param.    #
 # It will return the information of all upcoming menu items.                     #
