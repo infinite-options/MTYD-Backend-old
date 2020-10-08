@@ -397,6 +397,8 @@ def confirm():
     finally:
         disconnect(conn)
 
+
+'''
 class Login (Resource):
     def post(self):
         response = {}
@@ -466,7 +468,126 @@ class Login (Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+'''   
 
+
+
+class Login(Resource):
+    def post(self):
+        response = {}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            email = data['email']
+            password = data.get('password')
+            refresh_token = data.get('token')
+            #signup_platform = data.get('signup_platform')
+            query = """
+                    # CUSTOMER QUERY 1: LOGIN
+                    SELECT customer_uid,
+                        customer_last_name,
+                        customer_first_name,
+                        customer_email,
+                        password_hashed,
+                        email_verified,
+                        user_social_media,
+                        user_access_token,
+                        user_refresh_token
+                    FROM sf.customers c
+                    -- WHERE customer_email = "1m4kfun@gmail.com";
+                    WHERE customer_email = \'""" + email + """\';
+                    """
+            items = execute(query, 'get', conn)
+            print('Password', password)
+            print(items)
+
+            if items['code'] != 280:
+                response['message'] = "Internal Server Error."
+                response['code'] = 500
+                return response
+            elif not items['result']:
+                items['message'] = 'Email Not Found. Please signup'
+                items['result'] = ''
+                items['code'] = 404
+                return items
+            else:
+                print(items['result'])
+                print('sc: ', items['result'][0]['user_social_media'])
+
+
+                # checks if login was by social media
+                if password and items['result'][0]['user_social_media'] != 'NULL' and items['result'][0]['user_social_media'] != None:
+                    response['message'] = "Need to login by Social Media"
+                    response['code'] = 401
+                    return response
+
+               # nothing to check
+                elif (password is None and refresh_token is None) or (password is None and items['result'][0]['user_social_media'] == 'NULL'):
+                    response['message'] = "Enter password else login from social media"
+                    response['code'] = 405
+                    return response
+
+                # compare passwords if user_social_media is false
+                elif (items['result'][0]['user_social_media'] == 'NULL' or items['result'][0]['user_social_media'] == None) and password is not None:
+
+                    if items['result'][0]['password_hashed'] != password:
+                        items['message'] = "Wrong password"
+                        items['result'] = ''
+                        items['code'] = 406
+                        return items
+
+                    if ((items['result'][0]['email_verified']) == '0') or (items['result'][0]['email_verified'] == "FALSE"):
+                        response['message'] = "Account need to be verified by email."
+                        response['code'] = 407
+                        return response
+
+                # compare the refresh token because it never expire.
+                elif (items['result'][0]['user_social_media']) != 'NULL':
+                    '''
+                    keep
+                    if signup_platform != items['result'][0]['user_social_media']:
+                        items['message'] = "Wrong social media used for signup. Use \'" + items['result'][0]['user_social_media'] + "\'."
+                        items['result'] = ''
+                        items['code'] = 401
+                        return items
+                    '''
+                    if (items['result'][0]['user_refresh_token'] != refresh_token):
+                        print(items['result'][0]['user_refresh_token'])
+
+                        items['message'] = "Cannot Authenticated. Token is invalid"
+                        items['result'] = ''
+                        items['code'] = 408
+                        return items
+
+                else:
+                    string = " Cannot compare the password or refresh token while log in. "
+                    print("*" * (len(string) + 10))
+                    print(string.center(len(string) + 10, "*"))
+                    print("*" * (len(string) + 10))
+                    response['message'] = string
+                    response['code'] = 500
+                    return response
+                del items['result'][0]['password_hashed']
+                del items['result'][0]['email_verified']
+
+                query = "SELECT * from sf.customers WHERE customer_email = \'" + email + "\';"
+                items = execute(query, 'get', conn)
+                items['message'] = "Authenticated successfully."
+                items['code'] = 200
+                return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
+
+
+'''
 class AppleLogin (Resource):
     def post(self):
         try:
@@ -491,6 +612,138 @@ class AppleLogin (Resource):
                 return response, 400
         except:
             raise BadRequest("Request failed, please try again later.")
+'''
+
+
+
+class AppleLogin (Resource):
+
+    def post(self):
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+            token = request.form.get('id_token')
+            print(token)
+            if token:
+                print('INN')
+                data = jwt.decode(token, verify=False)
+                print('data-----', data)
+                email = data.get('email')
+
+                print(data, email)
+                if email is not None:
+                    sub = data['sub']
+                    query = """
+                    SELECT customer_uid,
+                        customer_last_name,
+                        customer_first_name,
+                        customer_email,
+                        password_hashed,
+                        email_verified,
+                        user_social_media,
+                        user_access_token,
+                        user_refresh_token
+                    FROM sf.customers c
+                    WHERE customer_email = \'""" + email + """\';
+                    """
+                    items = execute(query, 'get', conn)
+                    print(items)
+
+                    if items['code'] != 280:
+                        items['message'] = "Internal error"
+                        return items
+
+
+                    # new customer
+                    if not items['result']:
+                        items['message'] = "Email doesn't exists Please go to the signup page"
+                        get_user_id_query = "CALL new_customer_uid();"
+                        NewUserIDresponse = execute(get_user_id_query, 'get', conn)
+
+                        if NewUserIDresponse['code'] == 490:
+                            string = " Cannot get new User id. "
+                            print("*" * (len(string) + 10))
+                            print(string.center(len(string) + 10, "*"))
+                            print("*" * (len(string) + 10))
+                            response['message'] = "Internal Server Error."
+                            response['code'] = 500
+                            return response
+
+                        NewUserID = NewUserIDresponse['result'][0]['new_id']
+                        user_social_signup = 'APPLE'
+                        print('NewUserID', NewUserID)
+
+                        customer_insert_query = """
+                                    INSERT INTO sf.customers 
+                                    (
+                                        customer_uid,
+                                        customer_created_at,
+                                        customer_email,
+                                        user_social_media,
+                                        user_refresh_token
+                                    )
+                                    VALUES
+                                    (
+                                    
+                                        \'""" + NewUserID + """\',
+                                        \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
+                                        \'""" + email + """\',
+                                        \'""" + user_social_signup + """\',
+                                        \'""" + sub + """\'
+                                    );"""
+
+                        item = execute(customer_insert_query, 'post', conn)
+
+                        print('INSERT')
+
+                        if item['code'] != 281:
+                            item['message'] = 'Check insert sql query'
+                            return item
+                        #applelogin changes
+                        # return redirect("http://localhost:3000/socialsignup?id=" + NewUserID)
+                        return redirect("http://localhost:3000/social-sign-up?id=" + NewUserID)
+
+                    # Existing customer
+
+                    if items['result'][0]['user_refresh_token']:
+                        print(items['result'][0]['user_social_media'], items['result'][0]['user_refresh_token'])
+
+                        if items['result'][0]['user_social_media'] != "APPLE":
+                            items['message'] = "Wrong social media used for signup. Use \'" + items['result'][0]['user_social_media'] + "\'."
+                            items['code'] = 400
+                            return redirect("http://localhost:3000")
+                            #return items
+
+                        elif items['result'][0]['user_refresh_token'] != sub:
+                            items['message'] = "Token mismatch"
+                            items['code'] = 400
+                            return redirect("http://localhost:3000")
+                            #return items
+
+                        else:
+                            #applelogin changes
+                            # return redirect("http://localhost:3000/farms?id=" + items['result'][0]['customer_uid'])
+                            return redirect("http://localhost:3000/select-meal?id=" + items['result'][0]['customer_uid'])
+
+                else:
+                    items['message'] = "Email not returned by Apple LOGIN"
+                    items['code'] = 400
+                    return items
+
+
+            else:
+                response = {
+                    "message": "Token not found in Apple's Response",
+                    "code": 400
+                }
+                return response
+        except:
+            raise BadRequest("Request failed, please try again later.")
+
+
+
+
 
 class Change_Password(Resource):
     def post(self):
@@ -1238,6 +1491,11 @@ class Menu (Resource):
         finally:
             disconnect(conn)
 
+
+
+
+
+
 class Meals (Resource):
     def get(self):
         try:
@@ -1768,6 +2026,481 @@ class Ingredients_Need (Resource):
             raise BadRequest("Request failed, please try again later.")
         finally:
             disconnect(conn)
+
+
+
+
+
+
+
+
+
+
+
+class Edit_Menu(Resource):
+    def get(self):
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+
+            items = execute(""" select meal_name from meals;""", 'get', conn)
+            items2 = execute(""" select * from menu;""", 'get', conn)
+
+            response['message'] = 'Request successful.'
+            response['result'] = items
+            response['result2'] = items2
+
+            return response, 200
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+    def post(self):
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            print("connected")
+            menu_date = data['menu_date']
+            menu = data['menu']
+            print("data received")
+            print(menu_date)
+            print(menu)
+            items['delete_menu'] = execute("""delete from menu
+                                                        where menu_date = \'""" + str(menu_date) + """\';
+                                                            """, 'post', conn)
+            print("menu deleted")
+
+            i = 0
+            for eachitem in data['menu']:
+                menu_category = menu[i]['menu_category']
+                menu_type = menu[i]['menu_type']
+                meal_cat = menu[i]['meal_cat']
+                meal_name = menu[i]['meal_name']
+                default_meal = menu[i]['default_meal']
+
+                print(menu_category)
+                print(menu_type)
+                print(meal_cat)
+                print(meal_name)
+                print(default_meal)
+
+                items['menu_insert'] = execute(""" insert into menu 
+                                                    values 
+                                                    (\'""" + str(menu_date) + """\',\'""" + str(menu_category) + """\',
+                                                    \'""" + str(menu_type) + """\',\'""" + str(meal_cat) + """\',
+                                                    (select meal_id from meals where meal_name = \'""" + str(meal_name) + """\'),
+                                                    \'""" + str(default_meal) + """\');
+                                                    """, 'post', conn)
+                i += 1
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
+
+
+
+
+
+
+
+class Edit_Meal(Resource):
+    def get(self):
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+            items = execute(""" select * from meals;""", 'get', conn)
+
+            response['message'] = 'successful'
+            response['result'] = items
+            return response, 200
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+    def patch(self):
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+
+            mealId = data['mealId']
+            meal_category = data['meal_category']
+            meal_name = data['meal_name']
+            meal_desc = data['meal_desc']
+            meal_hint = data['meal_hint']
+            meal_photo_URL = data['meal_photo_URL']
+            # extra_meal_price = data['extra_meal_price']
+            meal_calories = data['meal_calories']
+            meal_protein = data['meal_protein']
+            meal_carbs = data['meal_carbs']
+            meal_fiber = data['meal_fiber']
+            meal_sugar = data['meal_sugar']
+            meal_fat = data['meal_fat']
+            meal_sat = data['meal_sat']
+            print(data)
+            print("Items read...")
+            items['update_meal'] = execute("""update meals 
+                                                set
+                                                meal_category = \'""" + str(meal_category) + """\',
+                                                meal_name = \'""" + str(meal_name) + """\',
+                                                meal_desc = \'""" + str(meal_desc) + """\',
+                                                meal_hint = \'""" + str(meal_hint) + """\',
+                                                meal_photo_URL = \'""" + str(meal_photo_URL) + """\',
+                                                # extra_meal_price = \'""" + str(extra_meal_price) + """\',
+                                                meal_calories = \'""" + str(meal_calories) + """\',
+                                                meal_protein = \'""" + str(meal_protein) + """\',
+                                                meal_carbs = \'""" + str(meal_carbs) + """\',
+                                                meal_fiber = \'""" + str(meal_fiber) + """\',
+                                                meal_sugar = \'""" + str(meal_sugar) + """\',
+                                                meal_fat = \'""" + str(meal_fat) + """\',
+                                                meal_sat  = \'""" + str(meal_sat) + """\'
+                                                where
+                                                meal_id = \'""" + str(mealId) + """\';""", 'post', conn)                                            
+            print("meal_updated...")
+            
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn) 
+
+
+
+
+
+
+
+
+
+
+
+
+class MealCreation(Resource):
+    def listIngredients(self, result):
+        response = {}
+        for meal in result:
+            key = meal['meal_id']
+            if key not in response:
+                response[key] = {}
+                response[key]['meal_name'] = meal['meal_name']
+                response[key]['ingredients'] = []
+            ingredient = {}
+            ingredient['name'] = meal['ingredient_desc']
+            ingredient['qty'] = meal['recipe_ingredient_qty']
+            ingredient['units'] = meal['recipe_unit']
+            ingredient['ingredient_id'] = meal['ingredient_id']
+            ingredient['measure_id'] = meal['recipe_measure_id']
+            response[key]['ingredients'].append(ingredient)
+
+        return response
+
+    def get(self):
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+
+            query = """SELECT
+                            m.meal_id,
+                            m.meal_name,
+                            ingredient_id,
+                            ingredient_desc,
+                            recipe_ingredient_qty,
+                            recipe_unit,
+                            recipe_measure_id
+                            FROM
+                            meals m
+                            left JOIN
+                            recipes r
+                            ON
+                            recipe_meal_id = meal_id
+                            left JOIN
+                            ingredients
+                            ON
+                            ingredient_id = recipe_ingredient_id
+                            left join
+                            conversion_units
+                            ON                    
+                            recipe_measure_id = measure_unit_uid
+                            order by recipe_meal_id;"""
+
+            sql = execute(query, 'get', conn)
+
+            items = self.listIngredients(sql['result'])
+
+            response['message'] = 'Request successful.'
+            response['result'] = items
+
+            return response, 200
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+    def post(self):
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+
+            # Post JSON needs to be in this format
+            #           data = {
+            #               'meal_id': '700-000001',
+            #               'ingredient_id': '110-000002',
+            #               'ingredient_qty': 3,
+            #               'measure_id': '130-000004'
+            #           }
+
+            query = """
+                INSERT INTO recipes (
+                    recipe_meal_id,
+                    recipe_ingredient_id,
+                    recipe_ingredient_qty,
+                    recipe_measure_id )
+                VALUES (
+                    \'""" + data['meal_id'] + """\',
+                    \'""" + data['ingredient_id'] + """\',
+                    \'""" + data['ingredient_qty'] + """\',
+                    \'""" + data['measure_id'] + """\')
+                ON DUPLICATE KEY UPDATE
+                    recipe_ingredient_qty = \'""" + data['ingredient_qty'] + """\',
+                    recipe_measure_id = \'""" + data['measure_id'] + "\';"
+
+            response['message'] = 'Request successful.'
+            response['result'] = items
+
+            return response, 200
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
+
+
+
+
+
+class Edit_Recipe(Resource):
+    def post(self):
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+
+            meal_id = data['meal_id']
+            meal_name = data['meal_name']
+            ingredients = data['ingredients']
+
+            items['delete_ingredients'] = execute("""delete from recipes
+                                                        where recipe_meal_id = \'""" + str(meal_id) + """\';
+                                                            """, 'post', conn)
+
+            i = 0
+            for eachIngredient in data['ingredients']:
+                name = ingredients[i]['name']
+                qty = ingredients[i]['qty']
+                units = ingredients[i]['units']
+                ingredient_id = ingredients[i]['ingredient_id']
+                measure_id = ingredients[i]['measure_id']
+                print(name)
+                print(qty)
+                print(units)
+                print(ingredient_id)
+                print(measure_id)
+                print(meal_id)
+                print(meal_name)
+                print("************************")
+
+                items['new_ingredients_insert'] = execute(""" INSERT INTO recipes (
+                                                            recipe_meal_id, recipe_ingredient_id, recipe_ingredient_qty, 
+                                                            recipe_measure_id
+                                                            ) 
+                                                            VALUES (
+                                                            \'""" + str(meal_id) + """\',\'""" + str(ingredient_id) + """\',\'""" + str(qty) + """\',\'""" + str(measure_id) + """\'
+                                                            );
+                                                            """, 'post', conn)
+                i += 1
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
+
+
+
+
+
+class Add_New_Ingredient(Resource):
+    def post(self):
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+
+            ingredient_desc = data['ingredient_desc']
+            package_size = data['package_size']
+            ingredient_measure_id = data['ingredient_measure_id']
+            ingredient_cost = data['ingredient_cost']
+
+            ingredientIdQuery = execute(
+                """CALL get_new_ingredient_id();""", 'get', conn)
+            ingredientId = ingredientIdQuery['result'][0]['new_id']
+            items['new_ingredient_insert'] = execute(""" INSERT INTO ingredients (
+                                                                ingredient_id, ingredient_desc, package_size,ingredient_measure_id,ingredient_cost, ingredient_measure
+                                                                ) 
+                                                                SELECT \'""" + str(ingredientId) + """\', \'""" + str(ingredient_desc) + """\',
+                                                                \'""" + str(package_size) + """\',\'""" + str(ingredient_measure_id) + """\',
+                                                                \'""" + str(ingredient_cost) + """\', mu.recipe_unit 
+                                                                FROM ptyd_conversion_units mu
+                                                                WHERE measure_unit_id=\'""" + str(ingredient_measure_id) + """\';
+                                                                """, 'post', conn)
+
+            response['message'] = 'Request successful.'
+            response['result'] = items
+
+            return response, 200
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+    def get(self):
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+
+            items = execute(""" SELECT
+                                *
+                                FROM
+                                ptyd_ingredients;""", 'get', conn)
+
+            response['message'] = 'Request successful.'
+            response['result'] = items
+
+            return response, 200
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
+
+
+
+
+
+
+class Add_Meal_plan(Resource):
+    def post(self):
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+            print("connection done...")
+            data = request.get_json(force=True)
+            print("data collected...")
+            print(data)
+            meal_planIdQuery = execute("""CALL get_new_meal_plan_id();""", 'get', conn)
+            print("meal_Plan_id called..")
+            mealPlanId = meal_planIdQuery['result'][0]['new_id']
+            print("new_meal_plan_id created...")
+
+            meal_plan_desc = data['meal_plan_desc']
+            payment_frequency = data['payment_frequency']
+            photo_URL = data['photo_URL']
+            plan_headline = data['plan_headline']
+            plan_footer = data['plan_footer']
+            num_meals = data['num_meals']
+            meal_weekly_price = data['meal_weekly_price']
+            meal_plan_price = data['meal_plan_price']
+            meal_shipping = data['meal_shipping']
+
+            print("Items read...")
+            items['new_meal_insert'] = execute("""INSERT INTO subscription_items  ( 	
+                                                    item_uid,item_desc,payment_frequency,item_photo,info_headline,
+                                                    info_footer,num_items,info_weekly_price,item_price,shipping 
+                                                    ) 
+                                                    VALUES ( 	
+                                                    \'""" + str(mealPlanId) + """\',\'""" + str(meal_plan_desc) + """\',
+                                                    \'""" + str(payment_frequency) + """\',\'""" + str(photo_URL) + """\',
+                                                    \'""" + str(plan_headline) + """\',\'""" + str(plan_footer) + """\',
+                                                    \'""" + str(num_meals) + """\',\'""" + str(meal_weekly_price) + """\',
+                                                    \'""" + str(meal_plan_price) + """\',\'""" + str(meal_shipping) + """\'
+                                                    );""", 'post', conn)
+
+            print("meal_plan_inserted...")
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
+
+class Profile(Resource):
+    # Fetches ALL DETAILS FOR A SPECIFIC USER
+
+    def get(self, id):
+        response = {}
+        items = {}
+        print("user_id: ", id)
+        try:
+            conn = connect()
+            query = """
+                    SELECT *
+                    FROM sf.customers c
+                    WHERE customer_uid = \'""" + id + """\'
+                    """
+            items = execute(query, 'get', conn)
+            if items['result']:
+
+                items['message'] = 'Profile Loaded successful'
+                items['result'] = items['result']
+                items['code'] = 200
+                return items
+            else:
+                items['message'] = "Customer UID doesn't exists"
+                items['result'] = items['result']
+                items['code'] = 404
+                return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
 # Define API routes
 # Customer APIs
 
@@ -1886,9 +2619,19 @@ api.add_resource(Ingredients_Need, '/api/v2/ingredients_need')
 
 #**********************************************************************************#
 
+api.add_resource(Edit_Menu, '/api/v2/Edit_Menu')
+
+api.add_resource(Edit_Meal, '/api/v2/Edit_Meal')
+
+api.add_resource(MealCreation, '/api/v2/mealcreation')
+
+api.add_resource(Edit_Recipe, '/api/v2/Edit_Recipe')
+
+api.add_resource(Add_New_Ingredient, '/api/v2/Add_New_Ingredient')
+
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=2000)
-
+    #app.run(host='0.0.0.0', port=2000)
