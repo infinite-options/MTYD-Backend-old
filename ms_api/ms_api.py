@@ -2629,6 +2629,8 @@ api.add_resource(Edit_Recipe, '/api/v2/Edit_Recipe')
 
 api.add_resource(Add_New_Ingredient, '/api/v2/Add_New_Ingredient')
 
+api.add_resource(Profile, '/api/v2/Profile/<string:id>')
+
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
