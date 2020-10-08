@@ -222,6 +222,8 @@ def simple_post_execute(queries, names, conn):
     response['message'] = "Successful."
     return response, 201
 
+
+
 class SignUp(Resource):
     def post(self):
         try:
@@ -233,7 +235,7 @@ class SignUp(Resource):
             lastName = data['last_name']
             phone = data['phone_number']
             address = data['address']
-            unit = "'" + data['unit'] + "'" if data.get('unit') is not None else 'NULL'
+            unit = data['unit'] if data.get('unit') is not None else 'NULL'
             city = data['city']
             state = data['state']
             zip_code = data['zip_code']
@@ -242,24 +244,13 @@ class SignUp(Resource):
 
             referral = data['referral_source']
             role = data['role']
+            cust_id = data['cust_id'] if data.get('cust_id') is not None else 'NULL'
 
             if data.get('social') is None or data.get('social') == "FALSE" or data.get('social') == False:
                 social_signup = False
             else:
                 social_signup = True
-            # check if there is a same customer_id existing
-            query = """
-                    SELECT customer_email FROM customers
-                    WHERE customer_email = \'""" + email + "\';"
-
-            response = simple_get_execute(query, "Sigup - Check for Existing Customer", conn)
-            if response[1] == 500:
-                return response
-            elif response[1] == 200:
-                response = {
-                    'message': "Email address has already taken."
-                }
-                return response, 409
+            
 
             get_user_id_query = "CALL new_customer_uid();"
             NewUserIDresponse = execute(get_user_id_query, 'get', conn)
@@ -288,70 +279,145 @@ class SignUp(Resource):
                 salt = 'NULL'
                 password = 'NULL'
                 algorithm = 'NULL'
-                user_social_signup = "'" + data['social'] + "'"
+                user_social_signup = data['social']
             # write everything to database
-            customer_insert_query = ["""
-                                    INSERT INTO customers 
-                                    (
-                                        customer_uid,
-                                        customer_created_at,
-                                        customer_first_name,
-                                        customer_last_name,
-                                        customer_phone_num,
-                                        customer_email,
-                                        customer_address,
-                                        customer_unit,
-                                        customer_city,
-                                        customer_state,
-                                        customer_zip,
-                                        customer_lat,
-                                        customer_long,
-                                        password_salt,
-                                        password_hashed,
-                                        password_algorithm,
-                                        referral_source,
-                                        role,
-                                        email_verified,
-                                        user_social_media,
-                                        user_access_token,
-                                        user_refresh_token
-                                    )
-                                    VALUES
-                                    (
-                                        '""" + NewUserID + """',
-                                        '""" + getNow() + """',
-                                        '""" + str(firstName) + """',
-                                        '""" + str(lastName) + """',
-                                        '""" + str(phone) + """',
-                                        '""" + str(email) + """',
-                                        '""" + str(address) + """',
-                                        """ + str(unit) + """,
-                                        '""" + str(city) + """',
-                                        '""" + str(state) + """',
-                                        '""" + str(zip_code) + """',
-                                        '""" + str(latitude) + """',
-                                        '""" + str(longitude) + """',
-                                        """ + str(salt) + """,
-                                        """ + str(password) + """,
-                                        """ + str(algorithm) + """,
-                                        '""" + str(referral) + """',
-                                        '""" + str(role) + """',
-                                        FALSE,
-                                        """ + str(user_social_signup) + """,
-                                        """ + str(access_token) + """,
-                                        """ + str(refresh_token) + """
-                                    );
-                                    """]
-            response = simple_post_execute(customer_insert_query, ['SIGN_UP'], conn)
-            if response[1] != 201:
-                return response
-            response[0]['result'] = {
+
+            if cust_id != 'NULL' and cust_id:
+
+                NewUserID = cust_id
+
+                query = '''
+                            SELECT user_access_token, user_refresh_token
+                            FROM sf.customers
+                            WHERE customer_uid = \'''' + cust_id + '''\';
+                       '''
+                it = execute(query, 'get', conn)
+                print('it-------', it)
+
+                access_token = it['result'][0]['user_access_token']
+                refresh_token = it['result'][0]['user_refresh_token']
+
+
+                customer_insert_query =  ['''
+                                    UPDATE sf.customers 
+                                    SET 
+                                    customer_created_at = \'''' + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + '''\',
+                                    customer_first_name = \'''' + firstName + '''\',
+                                    customer_last_name = \'''' + lastName + '''\',
+                                    customer_phone_num = \'''' + phone + '''\',
+                                    customer_address = \'''' + address + '''\',
+                                    customer_unit = \'''' + unit + '''\',
+                                    customer_city = \'''' + city + '''\',
+                                    customer_state = \'''' + state + '''\',
+                                    customer_zip = \'''' + zip_code + '''\',
+                                    customer_lat = \'''' + latitude + '''\',
+                                    customer_long = \'''' + longitude + '''\',
+                                    password_salt = \'''' + salt + '''\',
+                                    password_hashed = \'''' + password + '''\',
+                                    password_algorithm = \'''' + algorithm + '''\',
+                                    referral_source = \'''' + referral + '''\',
+                                    role = \'''' + role + '''\',
+                                    user_social_media = \'''' + user_social_signup + '''\'
+                                    WHERE customer_uid = \'''' + cust_id + '''\';
+                                    ''']
+
+
+            else:
+
+                # check if there is a same customer_id existing
+                query = """
+                        SELECT customer_email FROM sf.customers
+                        WHERE customer_email = \'""" + email + "\';"
+                print('email---------')
+                items = execute(query, 'get', conn)
+                if items['result']:
+
+                    items['result'] = ""
+                    items['code'] = 409
+                    items['message'] = "Email address has already been taken."
+
+                    return items
+
+                if items['code'] == 480:
+
+                    items['result'] = ""
+                    items['code'] = 480
+                    items['message'] = "Internal Server Error."
+                    return items
+
+
+                # write everything to database
+                customer_insert_query = ["""
+                                        INSERT INTO sf.customers 
+                                        (
+                                            customer_uid,
+                                            customer_created_at,
+                                            customer_first_name,
+                                            customer_last_name,
+                                            customer_phone_num,
+                                            customer_email,
+                                            customer_address,
+                                            customer_unit,
+                                            customer_city,
+                                            customer_state,
+                                            customer_zip,
+                                            customer_lat,
+                                            customer_long,
+                                            password_salt,
+                                            password_hashed,
+                                            password_algorithm,
+                                            referral_source,
+                                            role,
+                                            user_social_media,
+                                            user_access_token,
+                                            user_refresh_token
+                                        )
+                                        VALUES
+                                        (
+                                        
+                                            \'""" + NewUserID + """\',
+                                            \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
+                                            \'""" + firstName + """\',
+                                            \'""" + lastName + """\',
+                                            \'""" + phone + """\',
+                                            \'""" + email + """\',
+                                            \'""" + address + """\',
+                                            \'""" + unit + """\',
+                                            \'""" + city + """\',
+                                            \'""" + state + """\',
+                                            \'""" + zip_code + """\',
+                                            \'""" + latitude + """\',
+                                            \'""" + longitude + """\',
+                                            \'""" + salt + """\',
+                                            \'""" + password + """\',
+                                            \'""" + algorithm + """\',
+                                            \'""" + referral + """\',
+                                            \'""" + role + """\',
+                                            \'""" + user_social_signup + """\',
+                                            \'""" + access_token + """\',
+                                            \'""" + refresh_token + """\');"""]
+
+            items = execute(customer_insert_query[0], 'post', conn)
+            print(customer_insert_query[0])
+            if items['code'] != 281:
+                items['result'] = ""
+                items['code'] = 480
+                items['message'] = "Error while inserting values in database"
+
+                return items
+
+
+            items['result'] = {
                 'first_name': firstName,
                 'last_name': lastName,
                 'customer_uid': NewUserID,
                 'access_token': access_token,
                 'refresh_token': refresh_token
             }
+            items['message'] = 'Signup successful'
+            items['code'] = 200
+
+
             # Sending verification email
             if social_signup == False:
                 token = s.dumps(email)
@@ -361,7 +427,7 @@ class SignUp(Resource):
                 link = url_for('confirm', token=token, hashed=hashed, _external=True)
                 msg.body = "Click on the link {} to verify your email address.".format(link)
                 mail.send(msg)
-            return response
+            return items
         except:
             print("Error happened while Sign Up")
             if "NewUserID" in locals():
@@ -396,6 +462,8 @@ def confirm():
         return str(err), status
     finally:
         disconnect(conn)
+
+
 
 
 '''
@@ -2643,5 +2711,5 @@ api.add_resource(Profile, '/api/v2/Profile/<string:id>')
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=2000)
-    #app.run(host='0.0.0.0', port=2000)
+    #app.run(host='127.0.0.1', port=2000)
+    app.run(host='0.0.0.0', port=2000)
