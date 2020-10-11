@@ -1336,12 +1336,11 @@ class Checkout(Resource):
             cc_cvv = data['cc_cvv']
             cc_zip = data['cc_zip']
             amount_must_paid = float(amount_due) - float(amount_paid) - float(amount_discount)
-
             # We should sanitize the variable before writting into database.
             # must pass these check first
             if items == "'[]'":
                 raise BadRequest()
-
+            
             purchaseId = get_new_purchaseID(conn)
             if purchaseId[1] == 500:
                 print(purchaseId[0])
@@ -1361,11 +1360,11 @@ class Checkout(Resource):
             if customer_res['code'] != 280 or not customer_res['result']:
                 response['message'] = "Could not authenticate user"
                 return response, 401
-            if customer_res['result'][0]['password_hashed'] is not None:
+            # if customer_res['result'][0]['password_hashed'] is not None: original
+            if customer_res['result'][0]['password_hashed'] != 'NULL' and customer_res['result'][0]['password_hashed'] is not None:
                 if customer_res['result'][0]['password_hashed'] != data['salt']:
                     response['message'] = "Could not authenticate user. Wrong Password"
                     return response, 401
-
             # Validate credit card
             # if str(data['cc_num'][0:12]) == "XXXXXXXXXXXX":
             #     latest_purchase = get_latest_purchases(business_id, customer_uid)
