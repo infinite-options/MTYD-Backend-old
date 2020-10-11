@@ -1162,6 +1162,27 @@ class Meals_Selected(Resource):
         try:
             conn = connect()
             customer_uid = request.args['customer_uid']
+            query = """
+                    # CUSTOMER QUERY 3: ALL MEAL SELECTIONS BY CUSTOMER  (INCLUDES HISTORY)
+                    SELECT * FROM sf.latest_combined_meal lcm
+                    LEFT JOIN sf.lplp
+                        ON lcm.sel_purchase_id = lplp.purchase_id
+                    WHERE pur_customer_uid = '""" + customer_uid + """';
+                    """
+
+
+
+            return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+class Meals_Selected_Specific(Resource):
+    def get(self):
+        try:
+            conn = connect()
+            customer_uid = request.args['customer_uid']
             purchase_id = request.args['purchase_id']
             menu_date = request.args['menu_date']
             query = """
@@ -1181,6 +1202,7 @@ class Meals_Selected(Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+
 
 
 class Get_Upcoming_Menu(Resource):
@@ -1361,6 +1383,8 @@ class Checkout(Resource):
                 response['message'] = "Could not authenticate user"
                 return response, 401
             # if customer_res['result'][0]['password_hashed'] is not None: original
+            print(customer_res['result'][0]['password_hashed'])
+            print(data['salt'])
             if customer_res['result'][0]['password_hashed'] != 'NULL' and customer_res['result'][0]['password_hashed'] is not None:
                 if customer_res['result'][0]['password_hashed'] != data['salt']:
                     response['message'] = "Could not authenticate user. Wrong Password"
@@ -2960,9 +2984,11 @@ api.add_resource(Add_New_Ingredient, '/api/v2/Add_New_Ingredient')
 
 api.add_resource(Profile, '/api/v2/Profile/<string:id>')
 
+api.add_resource(Meals_Selected_Specific, '/api/v2/meals_selected_specific')
+
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=2000)
-    #app.run(host='0.0.0.0', port=2000)
+    #app.run(host='127.0.0.1', port=2000)
+    app.run(host='0.0.0.0', port=2000)
