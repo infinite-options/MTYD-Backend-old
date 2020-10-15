@@ -2821,8 +2821,10 @@ class Profile(Resource):
     # Fetches ALL DETAILS FOR A SPECIFIC USER
 
     def get(self, id):
+    #def get(self):
         response = {}
         items = {}
+        #customer_uid = request.args['customer_uid']
         print("user_id: ", id)
         try:
             conn = connect()
@@ -2848,6 +2850,74 @@ class Profile(Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+
+
+
+
+
+class UpdateProfile(Resource):
+    def post(self):
+            response = {}
+            item = {}
+            try:
+                conn = connect()
+                data = request.get_json(force=True)
+
+                #query = "CALL sf.new_profile"
+                #new_profile_query = execute(query, 'get', conn)
+                #new_profile = newPaymentUID_query['result'][0]['new_id']
+
+                uid= data['uid']
+                f_name= data['first_name']
+                l_name= data['last_name']
+                phone= data['phone']
+                email= data['email']
+                address= data['address']
+                unit= data['unit']
+                city= data['city']
+                state= data['state']
+                zip_code= data['zip']
+                notification= data['noti']
+                print(data)
+
+                customer_insert_query = [""" 
+                                    UPDATE sf.customers
+                                    SET
+                                    customer_first_name = \'""" + f_name + """\',
+                                    customer_last_name = \'""" + l_name + """\',
+                                    customer_phone_num = \'""" + phone + """\',
+                                    customer_email = \'""" + email + """\',
+                                    customer_address = \'""" + address + """\',
+                                    customer_unit = \'""" + unit + """\',
+                                    customer_city = \'""" + city + """\',
+                                    customer_state = \'""" + state + """\',
+                                    customer_zip = \'""" + zip_code + """\',
+                                    notification_approval = \'""" + notification + """\'
+                                    WHERE customer_uid =\'""" + uid + """\';
+                                    
+                                """]
+
+
+                print(customer_insert_query)
+                item = execute(customer_insert_query[0], 'post', conn)
+                if item['code'] == 281:
+                    item['code'] = 200
+                    item['message'] = 'Profile info updated'
+                else:
+                    item['message'] = 'check sql query'
+                    item['code'] = 490
+
+                return item
+
+            except:
+                print("Error happened while inserting in customer table")
+                raise BadRequest('Request failed, please try again later.')
+            finally:
+                disconnect(conn)
+                print('process completed')
+
+
+
 
 
 
@@ -2979,12 +3049,14 @@ api.add_resource(Edit_Meal, '/api/v2/Edit_Meal')
 api.add_resource(MealCreation, '/api/v2/mealcreation')
 
 api.add_resource(Edit_Recipe, '/api/v2/Edit_Recipe')
-
+    
 api.add_resource(Add_New_Ingredient, '/api/v2/Add_New_Ingredient')
 
 api.add_resource(Profile, '/api/v2/Profile/<string:id>')
 
 api.add_resource(Meals_Selected_Specific, '/api/v2/meals_selected_specific')
+
+api.add_resource(UpdateProfile, '/api/v2/UpdateProfile')
 
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
