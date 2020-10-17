@@ -509,7 +509,6 @@ class SignUp(Resource):
             NewUserID = NewUserIDresponse['result'][0]['new_id']
 
             if social_signup == False:
-
                 salt = (datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
 
                 password = sha512((data['password'] + salt).encode()).hexdigest()
@@ -528,7 +527,7 @@ class SignUp(Resource):
                 user_social_signup = data['social']
 
             if cust_id != 'NULL' and cust_id:
-
+                
                 NewUserID = cust_id
 
                 query = '''
@@ -568,7 +567,7 @@ class SignUp(Resource):
 
 
             else:
-
+                #print("1")
                 # check if there is a same customer_id existing
                 query = """
                         SELECT customer_email FROM sf.customers
@@ -590,60 +589,37 @@ class SignUp(Resource):
                     items['message'] = "Internal Server Error."
                     return items
 
-
+                #print("2")
                 # write everything to database
+                # this method of insert, only works for mysql. and limits insert to one row at a time
                 customer_insert_query = ["""
                                         INSERT INTO sf.customers 
-                                        (
-                                            customer_uid,
-                                            customer_created_at,
-                                            customer_first_name,
-                                            customer_last_name,
-                                            customer_phone_num,
-                                            customer_email,
-                                            customer_address,
-                                            customer_unit,
-                                            customer_city,
-                                            customer_state,
-                                            customer_zip,
-                                            customer_lat,
-                                            customer_long,
-                                            password_salt,
-                                            password_hashed,
-                                            password_algorithm,
-                                            referral_source,
-                                            role,
-                                            user_social_media,
-                                            user_access_token,
-                                            user_refresh_token
-                                        )
-                                        VALUES
-                                        (
-                                        
-                                            \'""" + NewUserID + """\',
-                                            \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
-                                            \'""" + firstName + """\',
-                                            \'""" + lastName + """\',
-                                            \'""" + phone + """\',
-                                            \'""" + email + """\',
-                                            \'""" + address + """\',
-                                            \'""" + unit + """\',
-                                            \'""" + city + """\',
-                                            \'""" + state + """\',
-                                            \'""" + zip_code + """\',
-                                            \'""" + latitude + """\',
-                                            \'""" + longitude + """\',
-                                            \'""" + salt + """\',
-                                            \'""" + password + """\',
-                                            \'""" + algorithm + """\',
-                                            \'""" + referral + """\',
-                                            \'""" + role + """\',
-                                            \'""" + user_social_signup + """\',
-                                            \'""" + access_token + """\',
-                                            \'""" + refresh_token + """\');"""]
-
+                                        set
+                                            customer_uid= \'""" + NewUserID + """\',
+                                            customer_created_at = \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
+                                            customer_first_name = \'""" + firstName + """\',
+                                            customer_last_name =\'""" + lastName + """\',
+                                            customer_phone_num =\'""" + phone + """\',
+                                            customer_email = \'""" + email + """\',
+                                            customer_address = \'""" + address + """\',
+                                            customer_unit = \'""" + unit + """\',
+                                            customer_city = \'""" + city + """\',
+                                            customer_state = \'""" + state + """\',
+                                            customer_zip =\'""" + zip_code + """\',
+                                            customer_lat =\'""" + latitude + """\',
+                                            customer_long =\'""" + longitude + """\',
+                                            password_salt =\'""" + salt + """\',
+                                            password_hashed =\'""" + password + """\',
+                                            password_algorithm =\'""" + algorithm + """\',
+                                            referral_source= \'""" + referral + """\',
+                                            role =\'""" + role + """\',
+                                            user_social_media =\'""" + user_social_signup + """\',
+                                            user_access_token =\'""" + access_token + """\',
+                                            user_refresh_token =\'""" + refresh_token + """\'
+                                        ;"""]
+            #print("3")
             items = execute(customer_insert_query[0], 'post', conn)
-
+            #print(items)
             if items['code'] != 281:
                 items['result'] = ""
                 items['code'] = 480
@@ -651,7 +627,7 @@ class SignUp(Resource):
 
                 return items
 
-
+            #print("4")
             items['result'] = {
                 'first_name': firstName,
                 'last_name': lastName,
@@ -995,25 +971,37 @@ class AppleLogin (Resource):
                         NewUserID = NewUserIDresponse['result'][0]['new_id']
                         user_social_signup = 'APPLE'
                         print('NewUserID', NewUserID)
-
+                        #only works for mysql, and only allows for inserting one row at a time
                         customer_insert_query = """
                                     INSERT INTO sf.customers 
-                                    (
-                                        customer_uid,
-                                        customer_created_at,
-                                        customer_email,
-                                        user_social_media,
-                                        user_refresh_token
-                                    )
-                                    VALUES
-                                    (
+                                    set
+                                        customer_uid = \'""" + NewUserID + """\',
+                                        customer_created_at = \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
+                                        customer_email = \'""" + email + """\',
+                                        user_social_media = \'""" + user_social_signup + """\',
+                                        user_refresh_token = \'""" + sub + """\'
+                                    ;"""
+
+
+                                    #original code for reference
+                                    #   INSERT INTO sf.customers 
+                                    # (
+                                    #     customer_uid,
+                                    #     customer_created_at,
+                                    #     customer_email,
+                                    #     user_social_media,
+                                    #     user_refresh_token
+                                    # )
+                                    # VALUES
+                                    # (
                                     
-                                        \'""" + NewUserID + """\',
-                                        \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
-                                        \'""" + email + """\',
-                                        \'""" + user_social_signup + """\',
-                                        \'""" + sub + """\'
-                                    );"""
+                                    #     \'""" + NewUserID + """\',
+                                    #     \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
+                                    #     \'""" + email + """\',
+                                    #     \'""" + user_social_signup + """\',
+                                    #     \'""" + sub + """\'
+                                    # );"""
+
 
                         item = execute(customer_insert_query, 'post', conn)
 
@@ -1674,7 +1662,7 @@ class Change_Purchase (Resource):
             cc_cvv = data['cc_cvv']
             purchase_id = data['purchase_id']
             new_item_id = data['new_item_id']
-
+            #print("1")
             #Check user's identity
             cus_query = """
                         SELECT password_hashed,
@@ -2542,6 +2530,7 @@ class Edit_Meal(Resource):
 class MealCreation(Resource):
     def listIngredients(self, result):
         response = {}
+        print("1")
         for meal in result:
             key = meal['meal_id']
             if key not in response:
@@ -2557,7 +2546,7 @@ class MealCreation(Resource):
             response[key]['ingredients'].append(ingredient)
 
         return response
-
+        print("2")
     def get(self):
         response = {}
         items = {}
@@ -2602,36 +2591,72 @@ class MealCreation(Resource):
             disconnect(conn)
 
     def post(self):
+        # response = {}
         try:
             conn = connect()
             data = request.get_json(force=True)
 
             # Post JSON needs to be in this format
-            #           data = {
-            #               'meal_id': '700-000001',
-            #               'ingredient_id': '110-000002',
-            #               'ingredient_qty': 3,
-            #               'measure_id': '130-000004'
-            #           }
+                    #   data = {
+                    #       'meal_id': '700-000001',
+                    #       'ingredient_id': '110-000002',
+                    #       'ingredient_qty': 3,
+                    #       'measure_id': '130-000004'
+                    #   }
+            #print("1")
 
+            # get_user_id_query = "CALL new_customer_uid();"
+            # print(get_user_id_query)
+            # NewUserIDresponse = execute(get_user_id_query, 'get', conn)
+            # print(NewUserIDresponse)
+            get_recipe_query = "CALL new_recipe_uid();"
+            #print("2")
+            #print(get_recipe_query)
+            recipe_uid = execute(get_recipe_query, 'get', conn)
+            #print(recipe_uid)
+            NewRecipeID = recipe_uid['result'][0]['new_id']
+            #print(NewRecipeID)
+
+            #print("5")
             query = """
-                INSERT INTO recipes (
-                    recipe_meal_id,
-                    recipe_ingredient_id,
-                    recipe_ingredient_qty,
-                    recipe_measure_id )
-                VALUES (
-                    \'""" + data['meal_id'] + """\',
-                    \'""" + data['ingredient_id'] + """\',
-                    \'""" + data['ingredient_qty'] + """\',
-                    \'""" + data['measure_id'] + """\')
+                INSERT INTO recipes 
+                SET
+                    recipe_uid = \'""" + NewRecipeID + """\',
+                    recipe_meal_id = \'""" + data['meal_id'] + """\',
+                    recipe_ingredient_id = \'""" + data['ingredient_id'] + """\',
+                    recipe_ingredient_qty = \'""" + data['ingredient_qty'] + """\',
+                    recipe_measure_id = \'""" + data['measure_id'] + """\'
+
                 ON DUPLICATE KEY UPDATE
                     recipe_ingredient_qty = \'""" + data['ingredient_qty'] + """\',
                     recipe_measure_id = \'""" + data['measure_id'] + "\';"
-
-            response['message'] = 'Request successful.'
-            response['result'] = items
-
+            #print("6")
+            #print(data)
+            #original code
+            # query = """
+            #     INSERT INTO recipes (
+            #         recipe_meal_id,
+            #         recipe_ingredient_id,
+            #         recipe_ingredient_qty,
+            #         recipe_measure_id )
+            #     VALUES (
+            #         \'""" + data['meal_id'] + """\',
+            #         \'""" + data['ingredient_id'] + """\',
+            #         \'""" + data['ingredient_qty'] + """\',
+            #         \'""" + data['measure_id'] + """\')
+            #     ON DUPLICATE KEY UPDATE
+            #         recipe_ingredient_qty = \'""" + data['ingredient_qty'] + """\',
+            #         recipe_measure_id = \'""" + data['measure_id'] + "\';"
+            #print("7")
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            #print("8")
+            #items = self.listIngredients(sql['result'])
+            #print(items)
+            response = 'Request successful.'
+            #print("9")
+            
+            #response['result'] = items
+            #print("10")
             return response, 200
         except:
             raise BadRequest('Request failed, please try again later.')
@@ -3049,7 +3074,7 @@ api.add_resource(Edit_Meal, '/api/v2/Edit_Meal')
 api.add_resource(MealCreation, '/api/v2/mealcreation')
 
 api.add_resource(Edit_Recipe, '/api/v2/Edit_Recipe')
-    
+
 api.add_resource(Add_New_Ingredient, '/api/v2/Add_New_Ingredient')
 
 api.add_resource(Profile, '/api/v2/Profile/<string:id>')
@@ -3062,5 +3087,5 @@ api.add_resource(UpdateProfile, '/api/v2/UpdateProfile')
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=2000)
-    #app.run(host='0.0.0.0', port=2000)
+    #app.run(host='127.0.0.1', port=2000)
+    app.run(host='0.0.0.0', port=2000)
