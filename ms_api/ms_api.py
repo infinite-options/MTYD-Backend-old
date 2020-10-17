@@ -2946,6 +2946,41 @@ class UpdateProfile(Resource):
 
 
 
+class access_refresh_update(Resource):
+
+    def post(self):
+
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            query = """
+                    UPDATE sf.customers SET 
+                    user_access_token = \'""" + data['access_token'] + """\', 
+                    user_refresh_token = \'""" + data['refresh_token'] + """\', 
+                    social_timestamp =  \'""" + data['social_timestamp'] + """\' 
+                    WHERE (customer_uid = \'""" + data['uid'] + """\'); ;
+                    """
+            print(query)
+            items = execute(query, 'post', conn)
+            if items['code'] == 281:
+                items['message'] = 'Access and refresh token updated successfully'
+                print(items['code'])
+                items['code'] = 200
+            else:
+                items['message'] = 'Check sql query'
+                items['code'] = 400
+
+
+            return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
 
 
 # Define API routes
@@ -3082,6 +3117,8 @@ api.add_resource(Profile, '/api/v2/Profile/<string:id>')
 api.add_resource(Meals_Selected_Specific, '/api/v2/meals_selected_specific')
 
 api.add_resource(UpdateProfile, '/api/v2/UpdateProfile')
+
+api.add_resource(access_refresh_update, '/api/v2/access_refresh_update')
 
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
