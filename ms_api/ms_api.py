@@ -488,6 +488,7 @@ class SignUp(Resource):
             longitude = data['longitude']
             referral = data['referral_source']
             role = data['role']
+            time = data['social_timestamp']
             cust_id = data['cust_id'] if data.get('cust_id') is not None else 'NULL'
 
             if data.get('social') is None or data.get('social') == "FALSE" or data.get('social') == False:
@@ -562,6 +563,7 @@ class SignUp(Resource):
                                     referral_source = \'''' + referral + '''\',
                                     role = \'''' + role + '''\',
                                     user_social_media = \'''' + user_social_signup + '''\'
+                                    social_timestamp = \'''' + time + '''\'
                                     WHERE customer_uid = \'''' + cust_id + '''\';
                                     ''']
 
