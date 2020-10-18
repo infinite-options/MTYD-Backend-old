@@ -1013,8 +1013,8 @@ class AppleLogin (Resource):
                             item['message'] = 'Check insert sql query'
                             return item
                         #applelogin changes
-                        # return redirect("http://localhost:3000/socialsignup?id=" + NewUserID)
-                        return redirect("http://localhost:3000/social-sign-up?id=" + NewUserID)
+                        return redirect("https://mealtoyourdoor.netlify.app/sign-up")
+                        #return redirect("http://localhost:3000/social-sign-up?id=" + NewUserID)
 
                     # Existing customer
 
@@ -1024,19 +1024,21 @@ class AppleLogin (Resource):
                         if items['result'][0]['user_social_media'] != "APPLE":
                             items['message'] = "Wrong social media used for signup. Use \'" + items['result'][0]['user_social_media'] + "\'."
                             items['code'] = 400
-                            return redirect("http://localhost:3000")
+                            return redirect("https://mealtoyourdoor.netlify.app/")
+                            #return redirect("http://localhost:3000")
                             #return items
 
                         elif items['result'][0]['user_refresh_token'] != sub:
                             items['message'] = "Token mismatch"
                             items['code'] = 400
-                            return redirect("http://localhost:3000")
+                            return redirect("https://mealtoyourdoor.netlify.app/")
+                            #return redirect("http://localhost:3000")
                             #return items
 
                         else:
                             #applelogin changes
                             # return redirect("http://localhost:3000/farms?id=" + items['result'][0]['customer_uid'])
-                            return redirect("https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/meals_selected?customer_uid=" + items['result'][0]['customer_uid'])
+                            return redirect("https://mealtoyourdoor.netlify.app/meals_selected?customer_uid=" + items['result'][0]['customer_uid'])
                             #return redirect("http://localhost:3000/select-meal?id=" + items['result'][0]['customer_uid'])
 
                 else:
