@@ -1036,7 +1036,8 @@ class AppleLogin (Resource):
                         else:
                             #applelogin changes
                             # return redirect("http://localhost:3000/farms?id=" + items['result'][0]['customer_uid'])
-                            return redirect("http://localhost:3000/select-meal?id=" + items['result'][0]['customer_uid'])
+                            return redirect("https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/meals_selected?customer_uid=" + items['result'][0]['customer_uid'])
+                            #return redirect("http://localhost:3000/select-meal?id=" + items['result'][0]['customer_uid'])
 
                 else:
                     items['message'] = "Email not returned by Apple LOGIN"
@@ -1354,7 +1355,8 @@ class Checkout(Resource):
             delivery_email = data['delivery_email']
             delivery_phone = data['delivery_phone']
             delivery_address = data['delivery_address']
-            delivery_unit = data['delivery_unit']
+            #delivery_unit = data['delivery_unit']
+            delivery_unit = data['unit'] if data.get('unit') is not None else 'NULL'
             delivery_city = data['delivery_city']
             delivery_state = data['delivery_state']
             delivery_zip = data['delivery_zip']
