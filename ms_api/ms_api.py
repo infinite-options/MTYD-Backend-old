@@ -1014,7 +1014,7 @@ class AppleLogin (Resource):
                             item['message'] = 'Check insert sql query'
                             return item
                         #applelogin changes
-                        return redirect("https://mealtoyourdoor.netlify.app/social-sign-up")
+                        return redirect("https://mealtoyourdoor.netlify.app/social-sign-up?id=" + NewUserID)
                         #return redirect("http://localhost:3000/social-sign-up?id=" + NewUserID)
 
                     # Existing customer
