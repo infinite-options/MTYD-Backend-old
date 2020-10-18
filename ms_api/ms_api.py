@@ -1298,11 +1298,31 @@ class Next_Addon_Charge(Resource):
         finally:
             disconnect(conn)
 
+# class AccountSalt(Resource):
+#     def get(self):
+#         try:
+#             conn = connect()
+#             email = request.args['email']
+#             query = """
+#                     SELECT password_algorithm, 
+#                             password_salt 
+#                     FROM customers cus
+#                     WHERE customer_email = \'""" + email + """\';
+#                     """
+#             return simple_get_execute(query, __class__.__name__, conn)
+#         except:
+#             raise BadRequest('Request failed, please try again later.')
+#         finally:
+#             disconnect(conn)
+
+
 class AccountSalt(Resource):
-    def get(self):
+    def post(self):
         try:
             conn = connect()
-            email = request.args['email']
+            data = request.get_json(force=True)
+
+            email = data['email']
             query = """
                     SELECT password_algorithm, 
                             password_salt 
@@ -1314,6 +1334,11 @@ class AccountSalt(Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+
+
+
+
+
 
 class Checkout(Resource):
     def post(self):
