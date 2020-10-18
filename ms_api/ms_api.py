@@ -1009,18 +1009,21 @@ class AppleLogin (Resource):
 
                         print('INSERT')
 
+                        #if sql works, and new user then social sign up
                         if item['code'] != 281:
                             item['message'] = 'Check insert sql query'
                             return item
                         #applelogin changes
-                        return redirect("https://mealtoyourdoor.netlify.app/sign-up")
+                        return redirect("https://mealtoyourdoor.netlify.app/social-sign-up")
                         #return redirect("http://localhost:3000/social-sign-up?id=" + NewUserID)
 
                     # Existing customer
 
+                    #if we get back a refresh token
                     if items['result'][0]['user_refresh_token']:
                         print(items['result'][0]['user_social_media'], items['result'][0]['user_refresh_token'])
 
+                        #if result is not apple
                         if items['result'][0]['user_social_media'] != "APPLE":
                             items['message'] = "Wrong social media used for signup. Use \'" + items['result'][0]['user_social_media'] + "\'."
                             items['code'] = 400
@@ -1028,6 +1031,7 @@ class AppleLogin (Resource):
                             #return redirect("http://localhost:3000")
                             #return items
 
+                        #if referesh token does not match
                         elif items['result'][0]['user_refresh_token'] != sub:
                             items['message'] = "Token mismatch"
                             items['code'] = 400
@@ -1035,6 +1039,7 @@ class AppleLogin (Resource):
                             #return redirect("http://localhost:3000")
                             #return items
 
+                        #if social media = apple, and token matches, send to meals selected
                         else:
                             #applelogin changes
                             # return redirect("http://localhost:3000/farms?id=" + items['result'][0]['customer_uid'])
