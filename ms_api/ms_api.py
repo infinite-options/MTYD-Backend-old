@@ -1398,8 +1398,9 @@ class Checkout(Resource):
                 response['message'] = "Could not authenticate user"
                 return response, 401
             # if customer_res['result'][0]['password_hashed'] is not None: original
-            print(customer_res['result'][0]['password_hashed'])
-            print(data['salt'])
+            #print(customer_res['result'][0]['password_hashed'])
+            #print(data['salt'])
+            print("1")
             if customer_res['result'][0]['password_hashed'] != 'NULL' and customer_res['result'][0]['password_hashed'] is not None:
                 if customer_res['result'][0]['password_hashed'] != data['salt']:
                     response['message'] = "Could not authenticate user. Wrong Password"
@@ -3151,5 +3152,5 @@ api.add_resource(access_refresh_update, '/api/v2/access_refresh_update')
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=2000)
-    #app.run(host='0.0.0.0', port=2000)
+    #app.run(host='127.0.0.1', port=2000)
+    app.run(host='0.0.0.0', port=2000)
