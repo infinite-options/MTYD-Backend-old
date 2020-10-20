@@ -1045,7 +1045,7 @@ class AppleLogin (Resource):
                         else:
                             #applelogin changes
                             # return redirect("http://localhost:3000/farms?id=" + items['result'][0]['customer_uid'])
-                            return redirect("https://mealtoyourdoor.netlify.app/meals_selected?customer_uid=" + items['result'][0]['customer_uid'])
+                            return redirect("https://mealtoyourdoor.netlify.app/choose-plan?customer_uid=" + items['result'][0]['customer_uid'])
                             #return redirect("http://localhost:3000/select-meal?id=" + items['result'][0]['customer_uid'])
 
                 else:
