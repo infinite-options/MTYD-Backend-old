@@ -508,7 +508,7 @@ class SignUp(Resource):
                 response['message'] = "Internal Server Error."
                 return response, 500
             NewUserID = NewUserIDresponse['result'][0]['new_id']
-
+            
             if social_signup == False:
                 salt = (datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -542,9 +542,9 @@ class SignUp(Resource):
                 access_token = it['result'][0]['user_access_token']
                 refresh_token = it['result'][0]['user_refresh_token']
 
-
+                print("0")
                 customer_insert_query =  ['''
-                                    UPDATE sf.customers 
+                                    update sf.customers 
                                     SET 
                                     customer_created_at = \'''' + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + '''\',
                                     customer_first_name = \'''' + firstName + '''\',
@@ -558,14 +558,16 @@ class SignUp(Resource):
                                     customer_lat = \'''' + latitude + '''\',
                                     customer_long = \'''' + longitude + '''\',
                                     password_salt = \'''' + salt + '''\',
-                                    password_hashed = \'''' + password + '''\',
-                                    password_algorithm = \'''' + algorithm + '''\',
+	                                password_hashed = \'''' + password + '''\',
+	                                password_algorithm = \'''' + algorithm + '''\',
                                     referral_source = \'''' + referral + '''\',
                                     role = \'''' + role + '''\',
-                                    user_social_media = \'''' + user_social_signup + '''\'
+                                    user_social_media = \'''' + user_social_signup + '''\',
                                     social_timestamp = \'''' + time + '''\'
                                     WHERE customer_uid = \'''' + cust_id + '''\';
                                     ''']
+                # items = execute(customer_insert_query, 'get', conn)
+                print("0.5")
 
 
             else:
@@ -619,9 +621,9 @@ class SignUp(Resource):
                                             user_access_token =\'""" + access_token + """\',
                                             user_refresh_token =\'""" + refresh_token + """\'
                                         ;"""]
-            #print("3")
+            print("3")
             items = execute(customer_insert_query[0], 'post', conn)
-            #print(items)
+            print(items)
             if items['code'] != 281:
                 items['result'] = ""
                 items['code'] = 480
@@ -629,7 +631,7 @@ class SignUp(Resource):
 
                 return items
 
-            #print("4")
+            print("4")
             items['result'] = {
                 'first_name': firstName,
                 'last_name': lastName,
