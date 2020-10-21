@@ -226,10 +226,12 @@ def simple_post_execute(queries, names, conn):
 
 # class SignUp(Resource):
 #     def post(self):
+#         response = {}
+#         items = []
 #         try:
 #             conn = connect()
 #             data = request.get_json(force=True)
-
+#             print(data)
 #             email = data['email']
 #             firstName = data['first_name']
 #             lastName = data['last_name']
@@ -241,16 +243,16 @@ def simple_post_execute(queries, names, conn):
 #             zip_code = data['zip_code']
 #             latitude = data['latitude']
 #             longitude = data['longitude']
-
 #             referral = data['referral_source']
 #             role = data['role']
+#             time = data['social_timestamp']
 #             cust_id = data['cust_id'] if data.get('cust_id') is not None else 'NULL'
-
+            
 #             if data.get('social') is None or data.get('social') == "FALSE" or data.get('social') == False:
 #                 social_signup = False
 #             else:
 #                 social_signup = True
-            
+
 
 #             get_user_id_query = "CALL new_customer_uid();"
 #             NewUserIDresponse = execute(get_user_id_query, 'get', conn)
@@ -263,27 +265,27 @@ def simple_post_execute(queries, names, conn):
 #                 response['message'] = "Internal Server Error."
 #                 return response, 500
 #             NewUserID = NewUserIDresponse['result'][0]['new_id']
-
+            
 #             if social_signup == False:
-#                 salt = getNow()
-#                 hashed = sha512((data['password'] + salt).encode()).hexdigest()
-#                 password = "'" + sha512((data['password'] + salt).encode()).hexdigest() + "'"
-#                 algorithm = "'SHA512'"
-#                 salt = "'" + salt + "'"
+#                 salt = (datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
+
+#                 password = sha512((data['password'] + salt).encode()).hexdigest()
+#                 print('password------', password)
+#                 algorithm = "SHA512"
 #                 access_token = 'NULL'
 #                 refresh_token = 'NULL'
 #                 user_social_signup = 'NULL'
 #             else:
-#                 access_token = "'" + data['access_token'] + "'"
-#                 refresh_token = "'" + data['refresh_token'] + "'"
+
+#                 access_token = data['access_token']
+#                 refresh_token = data['refresh_token']
 #                 salt = 'NULL'
 #                 password = 'NULL'
 #                 algorithm = 'NULL'
 #                 user_social_signup = data['social']
-#             # write everything to database
 
 #             if cust_id != 'NULL' and cust_id:
-
+                
 #                 NewUserID = cust_id
 
 #                 query = '''
@@ -297,9 +299,9 @@ def simple_post_execute(queries, names, conn):
 #                 access_token = it['result'][0]['user_access_token']
 #                 refresh_token = it['result'][0]['user_refresh_token']
 
-
+#                 print("0")
 #                 customer_insert_query =  ['''
-#                                     UPDATE sf.customers 
+#                                     update sf.customers 
 #                                     SET 
 #                                     customer_created_at = \'''' + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + '''\',
 #                                     customer_first_name = \'''' + firstName + '''\',
@@ -313,17 +315,20 @@ def simple_post_execute(queries, names, conn):
 #                                     customer_lat = \'''' + latitude + '''\',
 #                                     customer_long = \'''' + longitude + '''\',
 #                                     password_salt = \'''' + salt + '''\',
-#                                     password_hashed = \'''' + password + '''\',
-#                                     password_algorithm = \'''' + algorithm + '''\',
+# 	                                password_hashed = \'''' + password + '''\',
+# 	                                password_algorithm = \'''' + algorithm + '''\',
 #                                     referral_source = \'''' + referral + '''\',
 #                                     role = \'''' + role + '''\',
-#                                     user_social_media = \'''' + user_social_signup + '''\'
+#                                     user_social_media = \'''' + user_social_signup + '''\',
+#                                     social_timestamp = \'''' + time + '''\'
 #                                     WHERE customer_uid = \'''' + cust_id + '''\';
 #                                     ''']
+#                 # items = execute(customer_insert_query, 'get', conn)
+#                 print("0.5")
 
 
 #             else:
-
+#                 #print("1")
 #                 # check if there is a same customer_id existing
 #                 query = """
 #                         SELECT customer_email FROM sf.customers
@@ -345,60 +350,37 @@ def simple_post_execute(queries, names, conn):
 #                     items['message'] = "Internal Server Error."
 #                     return items
 
-
+#                 #print("2")
 #                 # write everything to database
+#                 # this method of insert, only works for mysql. and limits insert to one row at a time
 #                 customer_insert_query = ["""
 #                                         INSERT INTO sf.customers 
-#                                         (
-#                                             customer_uid,
-#                                             customer_created_at,
-#                                             customer_first_name,
-#                                             customer_last_name,
-#                                             customer_phone_num,
-#                                             customer_email,
-#                                             customer_address,
-#                                             customer_unit,
-#                                             customer_city,
-#                                             customer_state,
-#                                             customer_zip,
-#                                             customer_lat,
-#                                             customer_long,
-#                                             password_salt,
-#                                             password_hashed,
-#                                             password_algorithm,
-#                                             referral_source,
-#                                             role,
-#                                             user_social_media,
-#                                             user_access_token,
-#                                             user_refresh_token
-#                                         )
-#                                         VALUES
-#                                         (
-                                        
-#                                             \'""" + NewUserID + """\',
-#                                             \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
-#                                             \'""" + firstName + """\',
-#                                             \'""" + lastName + """\',
-#                                             \'""" + phone + """\',
-#                                             \'""" + email + """\',
-#                                             \'""" + address + """\',
-#                                             \'""" + unit + """\',
-#                                             \'""" + city + """\',
-#                                             \'""" + state + """\',
-#                                             \'""" + zip_code + """\',
-#                                             \'""" + latitude + """\',
-#                                             \'""" + longitude + """\',
-#                                             \'""" + salt + """\',
-#                                             \'""" + password + """\',
-#                                             \'""" + algorithm + """\',
-#                                             \'""" + referral + """\',
-#                                             \'""" + role + """\',
-#                                             \'""" + user_social_signup + """\',
-#                                             \'""" + access_token + """\',
-#                                             \'""" + refresh_token + """\');"""]
-
+#                                         set
+#                                             customer_uid= \'""" + NewUserID + """\',
+#                                             customer_created_at = \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
+#                                             customer_first_name = \'""" + firstName + """\',
+#                                             customer_last_name =\'""" + lastName + """\',
+#                                             customer_phone_num =\'""" + phone + """\',
+#                                             customer_email = \'""" + email + """\',
+#                                             customer_address = \'""" + address + """\',
+#                                             customer_unit = \'""" + unit + """\',
+#                                             customer_city = \'""" + city + """\',
+#                                             customer_state = \'""" + state + """\',
+#                                             customer_zip =\'""" + zip_code + """\',
+#                                             customer_lat =\'""" + latitude + """\',
+#                                             customer_long =\'""" + longitude + """\',
+#                                             password_salt =\'""" + salt + """\',
+#                                             password_hashed =\'""" + password + """\',
+#                                             password_algorithm =\'""" + algorithm + """\',
+#                                             referral_source= \'""" + referral + """\',
+#                                             role =\'""" + role + """\',
+#                                             user_social_media =\'""" + user_social_signup + """\',
+#                                             user_access_token =\'""" + access_token + """\',
+#                                             user_refresh_token =\'""" + refresh_token + """\'
+#                                         ;"""]
+#             print("3")
 #             items = execute(customer_insert_query[0], 'post', conn)
-#             print(customer_insert_query[0])
+#             print(items)
 #             if items['code'] != 281:
 #                 items['result'] = ""
 #                 items['code'] = 480
@@ -406,7 +388,7 @@ def simple_post_execute(queries, names, conn):
 
 #                 return items
 
-
+#             print("4")
 #             items['result'] = {
 #                 'first_name': firstName,
 #                 'last_name': lastName,
@@ -417,16 +399,20 @@ def simple_post_execute(queries, names, conn):
 #             items['message'] = 'Signup successful'
 #             items['code'] = 200
 
+#             print('sss-----', social_signup)
 
-#             # Sending verification email
 #             if social_signup == False:
 #                 token = s.dumps(email)
 #                 msg = Message("Email Verification", sender='ptydtesting@gmail.com', recipients=[email])
-#                 # link = url_for('confirm', token=token, hashed=password, _external=True)
 
-#                 link = url_for('confirm', token=token, hashed=hashed, _external=True)
+#                 print('MESSAGE----', msg)
+#                 print('message complete')
+#                 link = url_for('confirm', token=token, hashed=password, _external=True)
+#                 print('link---', link)
 #                 msg.body = "Click on the link {} to verify your email address.".format(link)
+#                 print('msg-bd----', msg.body)
 #                 mail.send(msg)
+
 #             return items
 #         except:
 #             print("Error happened while Sign Up")
@@ -451,6 +437,8 @@ def simple_post_execute(queries, names, conn):
 #         update = execute(query, 'post', conn)
 #         if update.get('code') == 281:
 #             # redirect to login page
+#             # only for testing on localhost
+#             #return redirect('http://localhost:3000/login?email={}&hashed={}'.format(email, hashed))
 #             return redirect('https://mealtoyourdoor.netlify.app/?email={}&hashed={}'.format(email, hashed))
 #         else:
 #             print("Error happened while confirming an email address.")
@@ -488,8 +476,14 @@ class SignUp(Resource):
             longitude = data['longitude']
             referral = data['referral_source']
             role = data['role']
-            time = data['social_timestamp']
+            # time = data['social_timestamp']
             cust_id = data['cust_id'] if data.get('cust_id') is not None else 'NULL'
+            # if data.get('mobile') is None or data.get('mobile') == "FALSE" or data.get('mobile') == False:
+            #     access_token = data['access_token']
+            #     refresh_token = data['refresh_token']
+            # else
+            #     access_token = data['mobile_access']
+            #     refresh_token = data['mobile_refresh']
 
             if data.get('social') is None or data.get('social') == "FALSE" or data.get('social') == False:
                 social_signup = False
@@ -519,7 +513,6 @@ class SignUp(Resource):
                 refresh_token = 'NULL'
                 user_social_signup = 'NULL'
             else:
-
                 access_token = data['access_token']
                 refresh_token = data['refresh_token']
                 salt = 'NULL'
@@ -563,7 +556,7 @@ class SignUp(Resource):
                                     referral_source = \'''' + referral + '''\',
                                     role = \'''' + role + '''\',
                                     user_social_media = \'''' + user_social_signup + '''\',
-                                    social_timestamp = \'''' + time + '''\'
+                                    social_timestamp = DATE_ADD(now() , INTERVAL 14 DAY)
                                     WHERE customer_uid = \'''' + cust_id + '''\';
                                     ''']
                 # items = execute(customer_insert_query, 'get', conn)
@@ -619,6 +612,7 @@ class SignUp(Resource):
                                             role =\'""" + role + """\',
                                             user_social_media =\'""" + user_social_signup + """\',
                                             user_access_token =\'""" + access_token + """\',
+                                            social_timestamp = DATE_ADD(now() , INTERVAL 14 DAY),
                                             user_refresh_token =\'""" + refresh_token + """\'
                                         ;"""]
             print("3")
@@ -783,7 +777,7 @@ class Login(Resource):
             email = data['email']
             password = data.get('password')
             refresh_token = data.get('token')
-            #signup_platform = data.get('signup_platform')
+            signup_platform = data.get('signup_platform')
             query = """
                     # CUSTOMER QUERY 1: LOGIN
                     SELECT customer_uid,
@@ -1735,6 +1729,7 @@ class Change_Purchase (Resource):
                                         AND pur.purchase_status='ACTIVE';  
                                     """
             info_res = simple_get_execute(info_query, 'GET INFO FOR CHANGING PURCHASE', conn)
+            print("1")
             if info_res[1] != 200:
                 return info_res
             # Calculate refund
@@ -3163,5 +3158,5 @@ api.add_resource(access_refresh_update, '/api/v2/access_refresh_update')
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=2000)
-    #app.run(host='0.0.0.0', port=2000)
+    #app.run(host='127.0.0.1', port=2000)
+    app.run(host='0.0.0.0', port=2000)
