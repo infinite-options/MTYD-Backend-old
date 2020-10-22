@@ -498,7 +498,7 @@ def confirm():
             # redirect to login page
             # only for testing on localhost
             #return redirect('http://localhost:3000/login?email={}&hashed={}'.format(email, hashed))
-            return redirect('https://servingfresh.me/login?email={}&hashed={}'.format(email, hashed))
+            return redirect('https://mealtoyourdoor.netlify.app/?email={}&hashed={}'.format(email, hashed))
         else:
             print("Error happened while confirming an email address.")
             error = "Confirm error."
@@ -1090,7 +1090,7 @@ class AppleLogin (Resource):
                             item['message'] = 'Check insert sql query'
                             return item
                         print('successful redirect to signup')
-                        return redirect("http://localhost:3000/socialsignup?id=" + NewUserID)
+                        return redirect("https://mealtoyourdoor.netlify.app/social-sign-up?id=" + NewUserID)
 
 
                     # Existing customer
@@ -1103,17 +1103,17 @@ class AppleLogin (Resource):
                         print('1-----')
                         items['message'] = "Wrong social media used for signup. Use \'" + items['result'][0]['user_social_media'] + "\'."
                         items['code'] = 400
-                        return redirect("http://localhost:3000/adminlogin?media=" + items['result'][0]['user_social_media'])
+                        return redirect("https://mealtoyourdoor.netlify.app/")
 
                     elif items['result'][0]['social_id'] != sub:
                         print('20-----')
                         items['message'] = "social_id mismatch"
                         items['code'] = 400
-                        return redirect("http://localhost:3000/adminlogin")
+                        return redirect("https://mealtoyourdoor.netlify.app/")
 
                     else:
                         print('successful redirect to farms')
-                        return redirect("http://localhost:3000/adminlogin?id=" + items['result'][0]['customer_uid'])
+                        return redirect("https://mealtoyourdoor.netlify.app/choose-plan?customer_uid=" + items['result'][0]['customer_uid'])
 
 
 
