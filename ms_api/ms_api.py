@@ -422,9 +422,9 @@ class SignUp(Resource):
                                             \'""" + mobile_access_token + """\',
                                             \'""" + mobile_refresh_token + """\',
                                             \'""" + social_id + """\');"""]
-            print(customer_insert_query[0])
+            #print(customer_insert_query[0])
             items = execute(customer_insert_query[0], 'post', conn)
-
+            print(items)
             if items['code'] != 281:
                 items['result'] = ""
                 items['code'] = 480
@@ -1545,18 +1545,34 @@ class Next_Addon_Charge(Resource):
 
 class AccountSalt(Resource):
     def post(self):
+        items = {}
         try:
             conn = connect()
             data = request.get_json(force=True)
 
             email = data['email']
+            print("1")
             query = """
-                    SELECT password_algorithm, 
-                            password_salt 
-                    FROM customers cus
-                    WHERE customer_email = \'""" + email + """\';
-                    """
-            return simple_get_execute(query, __class__.__name__, conn)
+                        SELECT user_social_media
+                        FROM customers cus
+                        WHERE customer_email = \'""" + email + """\';
+                        """
+            items = simple_get_execute(query, __class__.__name__, conn)
+            #print("2")
+            #print(items[0]['result'][0]["user_social_media"])
+            #customer_res['result'][0]['password_hashed']
+            #print("3")
+            if items[0]['result'][0]["user_social_media"]is not None:
+                #print("4")
+                return items[0]['result'][0]["user_social_media"]
+            else:
+                query = """
+                        SELECT password_algorithm, 
+                                password_salt 
+                        FROM customers cus
+                        WHERE customer_email = \'""" + email + """\';
+                        """
+                return simple_get_execute(query, __class__.__name__, conn)
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
