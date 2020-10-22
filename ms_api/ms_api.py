@@ -224,6 +224,309 @@ def simple_post_execute(queries, names, conn):
 
 
 
+class SignUp(Resource):
+    def post(self):
+        response = {}
+        items = []
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            print(data)
+            email = data['email']
+            firstName = data['first_name']
+            lastName = data['last_name']
+            phone = data['phone_number']
+            address = data['address']
+            unit = data['unit'] if data.get('unit') is not None else 'NULL'
+            social_id = data['social_id'] if data.get('social_id') is not None else 'NULL'
+            city = data['city']
+            state = data['state']
+            zip_code = data['zip_code']
+            latitude = data['latitude']
+            longitude = data['longitude']
+            referral = data['referral_source']
+            role = data['role']
+            cust_id = data['cust_id'] if data.get('cust_id') is not None else 'NULL'
+
+            if data.get('social') is None or data.get('social') == "FALSE" or data.get('social') == False:
+                social_signup = False
+            else:
+                social_signup = True
+
+            print(social_signup)
+            get_user_id_query = "CALL new_customer_uid();"
+            NewUserIDresponse = execute(get_user_id_query, 'get', conn)
+
+            if NewUserIDresponse['code'] == 490:
+                string = " Cannot get new User id. "
+                print("*" * (len(string) + 10))
+                print(string.center(len(string) + 10, "*"))
+                print("*" * (len(string) + 10))
+                response['message'] = "Internal Server Error."
+                return response, 500
+            NewUserID = NewUserIDresponse['result'][0]['new_id']
+
+            if social_signup == False:
+
+                salt = (datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
+
+                password = sha512((data['password'] + salt).encode()).hexdigest()
+                print('password------', password)
+                algorithm = "SHA512"
+                mobile_access_token = 'NULL'
+                mobile_refresh_token = 'NULL'
+                user_access_token = 'NULL'
+                user_refresh_token = 'NULL'
+                user_social_signup = 'NULL'
+            else:
+
+                mobile_access_token = data['mobile_access_token']
+                mobile_refresh_token = data['mobile_refresh_token']
+                user_access_token = data['user_access_token']
+                user_refresh_token = data['user_refresh_token']
+                salt = 'NULL'
+                password = 'NULL'
+                algorithm = 'NULL'
+                user_social_signup = data['social']
+
+                print('ELSE- OUT')
+
+            if cust_id != 'NULL' and cust_id:
+
+                NewUserID = cust_id
+
+                query = '''
+                            SELECT user_access_token, user_refresh_token, mobile_access_token, mobile_refresh_token 
+                            FROM sf.customers
+                            WHERE customer_uid = \'''' + cust_id + '''\';
+                       '''
+                it = execute(query, 'get', conn)
+                print('it-------', it)
+
+                if it['result'][0]['user_access_token'] != 'FALSE':
+                    user_access_token = it['result'][0]['user_access_token']
+
+                if it['result'][0]['user_refresh_token'] != 'FALSE':
+                    user_refresh_token = it['result'][0]['user_refresh_token']
+
+                if it['result'][0]['mobile_access_token'] != 'FALSE':
+                    mobile_access_token = it['result'][0]['mobile_access_token']
+
+                if it['result'][0]['mobile_refresh_token'] != 'FALSE':
+                    mobile_refresh_token = it['result'][0]['mobile_refresh_token']
+
+                customer_insert_query =  ['''
+                                    UPDATE sf.customers 
+                                    SET 
+                                    customer_created_at = \'''' + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + '''\',
+                                    customer_first_name = \'''' + firstName + '''\',
+                                    customer_last_name = \'''' + lastName + '''\',
+                                    customer_phone_num = \'''' + phone + '''\',
+                                    customer_address = \'''' + address + '''\',
+                                    customer_unit = \'''' + unit + '''\',
+                                    customer_city = \'''' + city + '''\',
+                                    customer_state = \'''' + state + '''\',
+                                    customer_zip = \'''' + zip_code + '''\',
+                                    customer_lat = \'''' + latitude + '''\',
+                                    customer_long = \'''' + longitude + '''\',
+                                    password_salt = \'''' + salt + '''\',
+                                    password_hashed = \'''' + password + '''\',
+                                    password_algorithm = \'''' + algorithm + '''\',
+                                    referral_source = \'''' + referral + '''\',
+                                    role = \'''' + role + '''\',
+                                    user_social_media = \'''' + user_social_signup + '''\',
+                                    social_timestamp  =  DATE_ADD(now() , INTERVAL 14 DAY)
+                                    WHERE customer_uid = \'''' + cust_id + '''\';
+                                    ''']
+
+
+            else:
+
+                # check if there is a same customer_id existing
+                query = """
+                        SELECT customer_email FROM sf.customers
+                        WHERE customer_email = \'""" + email + "\';"
+                print('email---------')
+                items = execute(query, 'get', conn)
+                if items['result']:
+
+                    items['result'] = ""
+                    items['code'] = 409
+                    items['message'] = "Email address has already been taken."
+
+                    return items
+
+                if items['code'] == 480:
+
+                    items['result'] = ""
+                    items['code'] = 480
+                    items['message'] = "Internal Server Error."
+                    return items
+
+
+                # write everything to database
+                customer_insert_query = ["""
+                                        INSERT INTO sf.customers 
+                                        (
+                                            customer_uid,
+                                            customer_created_at,
+                                            customer_first_name,
+                                            customer_last_name,
+                                            customer_phone_num,
+                                            customer_email,
+                                            customer_address,
+                                            customer_unit,
+                                            customer_city,
+                                            customer_state,
+                                            customer_zip,
+                                            customer_lat,
+                                            customer_long,
+                                            password_salt,
+                                            password_hashed,
+                                            password_algorithm,
+                                            referral_source,
+                                            role,
+                                            user_social_media,
+                                            user_access_token,
+                                            social_timestamp,
+                                            user_refresh_token,
+                                            mobile_access_token,
+                                            mobile_refresh_token,
+                                            social_id
+                                        )
+                                        VALUES
+                                        (
+                                        
+                                            \'""" + NewUserID + """\',
+                                            \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
+                                            \'""" + firstName + """\',
+                                            \'""" + lastName + """\',
+                                            \'""" + phone + """\',
+                                            \'""" + email + """\',
+                                            \'""" + address + """\',
+                                            \'""" + unit + """\',
+                                            \'""" + city + """\',
+                                            \'""" + state + """\',
+                                            \'""" + zip_code + """\',
+                                            \'""" + latitude + """\',
+                                            \'""" + longitude + """\',
+                                            \'""" + salt + """\',
+                                            \'""" + password + """\',
+                                            \'""" + algorithm + """\',
+                                            \'""" + referral + """\',
+                                            \'""" + role + """\',
+                                            \'""" + user_social_signup + """\',
+                                            \'""" + user_access_token + """\',
+                                            DATE_ADD(now() , INTERVAL 14 DAY),
+                                            \'""" + user_refresh_token + """\',
+                                            \'""" + mobile_access_token + """\',
+                                            \'""" + mobile_refresh_token + """\',
+                                            \'""" + social_id + """\');"""]
+            print(customer_insert_query[0])
+            items = execute(customer_insert_query[0], 'post', conn)
+
+            if items['code'] != 281:
+                items['result'] = ""
+                items['code'] = 480
+                items['message'] = "Error while inserting values in database"
+
+                return items
+
+
+            items['result'] = {
+                'first_name': firstName,
+                'last_name': lastName,
+                'customer_uid': NewUserID,
+                'access_token': user_access_token,
+                'refresh_token': user_refresh_token,
+                'access_token': mobile_access_token,
+                'refresh_token': mobile_refresh_token,
+                'social_id': social_id
+
+
+            }
+            items['message'] = 'Signup successful'
+            items['code'] = 200
+
+            # Twilio sms service
+
+            #resp = url_for('sms_service', phone_num='+17327818408', _external=True)
+            #resp = sms_service('+1'+phone, firstName)
+            #print("resp --------", resp)
+
+
+
+            print('sss-----', social_signup)
+
+            if social_signup == False:
+                token = s.dumps(email)
+                msg = Message("Email Verification", sender='ptydtesting@gmail.com', recipients=[email])
+
+                print('MESSAGE----', msg)
+                print('message complete')
+                link = url_for('confirm', token=token, hashed=password, _external=True)
+                print('link---', link)
+                msg.body = "Click on the link {} to verify your email address.".format(link)
+                print('msg-bd----', msg.body)
+                mail.send(msg)
+
+
+
+            return items
+        except:
+            print("Error happened while Sign Up")
+            if "NewUserID" in locals():
+                execute("""DELETE FROM customers WHERE customer_uid = '""" + NewUserID + """';""", 'post', conn)
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+# confirmation page
+@app.route('/api/v2/confirm', methods=['GET'])
+def confirm():
+    try:
+        token = request.args['token']
+        hashed = request.args['hashed']
+        print("hased: ", hashed)
+        email = s.loads(token)  # max_age = 86400 = 1 day
+
+        # marking email confirmed in database, then...
+        conn = connect()
+        query = """UPDATE customers SET email_verified = 1 WHERE customer_email = \'""" + email + """\';"""
+        update = execute(query, 'post', conn)
+        if update.get('code') == 281:
+            # redirect to login page
+            # only for testing on localhost
+            #return redirect('http://localhost:3000/login?email={}&hashed={}'.format(email, hashed))
+            return redirect('https://servingfresh.me/login?email={}&hashed={}'.format(email, hashed))
+        else:
+            print("Error happened while confirming an email address.")
+            error = "Confirm error."
+            err_code = 401  # Verification code is incorrect
+            return error, err_code
+    except (SignatureExpired, BadTimeSignature) as err:
+        status = 403  # forbidden
+        return str(err), status
+    finally:
+        disconnect(conn)
+
+def sms_service(phone, name):
+    print(phone)
+
+    message = client.messages \
+                    .create(
+                         body="Hi " +name+ " thanks for signing up with Serving Fresh",
+                         from_='+18659786905',
+                         to=phone
+                     )
+    print(message.sid)
+
+    return "Sent"
+
+
+
+
+
 # class SignUp(Resource):
 #     def post(self):
 #         response = {}
@@ -245,9 +548,15 @@ def simple_post_execute(queries, names, conn):
 #             longitude = data['longitude']
 #             referral = data['referral_source']
 #             role = data['role']
-#             time = data['social_timestamp']
+#             # time = data['social_timestamp']
 #             cust_id = data['cust_id'] if data.get('cust_id') is not None else 'NULL'
-            
+#             # if data.get('mobile') is None or data.get('mobile') == "FALSE" or data.get('mobile') == False:
+#             #     access_token = data['access_token']
+#             #     refresh_token = data['refresh_token']
+#             # else
+#             #     access_token = data['mobile_access']
+#             #     refresh_token = data['mobile_refresh']
+
 #             if data.get('social') is None or data.get('social') == "FALSE" or data.get('social') == False:
 #                 social_signup = False
 #             else:
@@ -276,7 +585,6 @@ def simple_post_execute(queries, names, conn):
 #                 refresh_token = 'NULL'
 #                 user_social_signup = 'NULL'
 #             else:
-
 #                 access_token = data['access_token']
 #                 refresh_token = data['refresh_token']
 #                 salt = 'NULL'
@@ -320,7 +628,7 @@ def simple_post_execute(queries, names, conn):
 #                                     referral_source = \'''' + referral + '''\',
 #                                     role = \'''' + role + '''\',
 #                                     user_social_media = \'''' + user_social_signup + '''\',
-#                                     social_timestamp = \'''' + time + '''\'
+#                                     social_timestamp = DATE_ADD(now() , INTERVAL 14 DAY)
 #                                     WHERE customer_uid = \'''' + cust_id + '''\';
 #                                     ''']
 #                 # items = execute(customer_insert_query, 'get', conn)
@@ -376,6 +684,7 @@ def simple_post_execute(queries, names, conn):
 #                                             role =\'""" + role + """\',
 #                                             user_social_media =\'""" + user_social_signup + """\',
 #                                             user_access_token =\'""" + access_token + """\',
+#                                             social_timestamp = DATE_ADD(now() , INTERVAL 14 DAY),
 #                                             user_refresh_token =\'""" + refresh_token + """\'
 #                                         ;"""]
 #             print("3")
@@ -455,317 +764,6 @@ def simple_post_execute(queries, names, conn):
 
 
 
-class SignUp(Resource):
-    def post(self):
-        response = {}
-        items = []
-        try:
-            conn = connect()
-            data = request.get_json(force=True)
-            print(data)
-            email = data['email']
-            firstName = data['first_name']
-            lastName = data['last_name']
-            phone = data['phone_number']
-            address = data['address']
-            unit = data['unit'] if data.get('unit') is not None else 'NULL'
-            city = data['city']
-            state = data['state']
-            zip_code = data['zip_code']
-            latitude = data['latitude']
-            longitude = data['longitude']
-            referral = data['referral_source']
-            role = data['role']
-            # time = data['social_timestamp']
-            cust_id = data['cust_id'] if data.get('cust_id') is not None else 'NULL'
-            # if data.get('mobile') is None or data.get('mobile') == "FALSE" or data.get('mobile') == False:
-            #     access_token = data['access_token']
-            #     refresh_token = data['refresh_token']
-            # else
-            #     access_token = data['mobile_access']
-            #     refresh_token = data['mobile_refresh']
-
-            if data.get('social') is None or data.get('social') == "FALSE" or data.get('social') == False:
-                social_signup = False
-            else:
-                social_signup = True
-
-
-            get_user_id_query = "CALL new_customer_uid();"
-            NewUserIDresponse = execute(get_user_id_query, 'get', conn)
-
-            if NewUserIDresponse['code'] == 490:
-                string = " Cannot get new User id. "
-                print("*" * (len(string) + 10))
-                print(string.center(len(string) + 10, "*"))
-                print("*" * (len(string) + 10))
-                response['message'] = "Internal Server Error."
-                return response, 500
-            NewUserID = NewUserIDresponse['result'][0]['new_id']
-            
-            if social_signup == False:
-                salt = (datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
-
-                password = sha512((data['password'] + salt).encode()).hexdigest()
-                print('password------', password)
-                algorithm = "SHA512"
-                access_token = 'NULL'
-                refresh_token = 'NULL'
-                user_social_signup = 'NULL'
-            else:
-                access_token = data['access_token']
-                refresh_token = data['refresh_token']
-                salt = 'NULL'
-                password = 'NULL'
-                algorithm = 'NULL'
-                user_social_signup = data['social']
-
-            if cust_id != 'NULL' and cust_id:
-                
-                NewUserID = cust_id
-
-                query = '''
-                            SELECT user_access_token, user_refresh_token
-                            FROM sf.customers
-                            WHERE customer_uid = \'''' + cust_id + '''\';
-                       '''
-                it = execute(query, 'get', conn)
-                print('it-------', it)
-
-                access_token = it['result'][0]['user_access_token']
-                refresh_token = it['result'][0]['user_refresh_token']
-
-                print("0")
-                customer_insert_query =  ['''
-                                    update sf.customers 
-                                    SET 
-                                    customer_created_at = \'''' + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + '''\',
-                                    customer_first_name = \'''' + firstName + '''\',
-                                    customer_last_name = \'''' + lastName + '''\',
-                                    customer_phone_num = \'''' + phone + '''\',
-                                    customer_address = \'''' + address + '''\',
-                                    customer_unit = \'''' + unit + '''\',
-                                    customer_city = \'''' + city + '''\',
-                                    customer_state = \'''' + state + '''\',
-                                    customer_zip = \'''' + zip_code + '''\',
-                                    customer_lat = \'''' + latitude + '''\',
-                                    customer_long = \'''' + longitude + '''\',
-                                    password_salt = \'''' + salt + '''\',
-	                                password_hashed = \'''' + password + '''\',
-	                                password_algorithm = \'''' + algorithm + '''\',
-                                    referral_source = \'''' + referral + '''\',
-                                    role = \'''' + role + '''\',
-                                    user_social_media = \'''' + user_social_signup + '''\',
-                                    social_timestamp = DATE_ADD(now() , INTERVAL 14 DAY)
-                                    WHERE customer_uid = \'''' + cust_id + '''\';
-                                    ''']
-                # items = execute(customer_insert_query, 'get', conn)
-                print("0.5")
-
-
-            else:
-                #print("1")
-                # check if there is a same customer_id existing
-                query = """
-                        SELECT customer_email FROM sf.customers
-                        WHERE customer_email = \'""" + email + "\';"
-                print('email---------')
-                items = execute(query, 'get', conn)
-                if items['result']:
-
-                    items['result'] = ""
-                    items['code'] = 409
-                    items['message'] = "Email address has already been taken."
-
-                    return items
-
-                if items['code'] == 480:
-
-                    items['result'] = ""
-                    items['code'] = 480
-                    items['message'] = "Internal Server Error."
-                    return items
-
-                #print("2")
-                # write everything to database
-                # this method of insert, only works for mysql. and limits insert to one row at a time
-                customer_insert_query = ["""
-                                        INSERT INTO sf.customers 
-                                        set
-                                            customer_uid= \'""" + NewUserID + """\',
-                                            customer_created_at = \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
-                                            customer_first_name = \'""" + firstName + """\',
-                                            customer_last_name =\'""" + lastName + """\',
-                                            customer_phone_num =\'""" + phone + """\',
-                                            customer_email = \'""" + email + """\',
-                                            customer_address = \'""" + address + """\',
-                                            customer_unit = \'""" + unit + """\',
-                                            customer_city = \'""" + city + """\',
-                                            customer_state = \'""" + state + """\',
-                                            customer_zip =\'""" + zip_code + """\',
-                                            customer_lat =\'""" + latitude + """\',
-                                            customer_long =\'""" + longitude + """\',
-                                            password_salt =\'""" + salt + """\',
-                                            password_hashed =\'""" + password + """\',
-                                            password_algorithm =\'""" + algorithm + """\',
-                                            referral_source= \'""" + referral + """\',
-                                            role =\'""" + role + """\',
-                                            user_social_media =\'""" + user_social_signup + """\',
-                                            user_access_token =\'""" + access_token + """\',
-                                            social_timestamp = DATE_ADD(now() , INTERVAL 14 DAY),
-                                            user_refresh_token =\'""" + refresh_token + """\'
-                                        ;"""]
-            print("3")
-            items = execute(customer_insert_query[0], 'post', conn)
-            print(items)
-            if items['code'] != 281:
-                items['result'] = ""
-                items['code'] = 480
-                items['message'] = "Error while inserting values in database"
-
-                return items
-
-            print("4")
-            items['result'] = {
-                'first_name': firstName,
-                'last_name': lastName,
-                'customer_uid': NewUserID,
-                'access_token': access_token,
-                'refresh_token': refresh_token
-            }
-            items['message'] = 'Signup successful'
-            items['code'] = 200
-
-            print('sss-----', social_signup)
-
-            if social_signup == False:
-                token = s.dumps(email)
-                msg = Message("Email Verification", sender='ptydtesting@gmail.com', recipients=[email])
-
-                print('MESSAGE----', msg)
-                print('message complete')
-                link = url_for('confirm', token=token, hashed=password, _external=True)
-                print('link---', link)
-                msg.body = "Click on the link {} to verify your email address.".format(link)
-                print('msg-bd----', msg.body)
-                mail.send(msg)
-
-            return items
-        except:
-            print("Error happened while Sign Up")
-            if "NewUserID" in locals():
-                execute("""DELETE FROM customers WHERE customer_uid = '""" + NewUserID + """';""", 'post', conn)
-            raise BadRequest('Request failed, please try again later.')
-        finally:
-            disconnect(conn)
-
-# confirmation page
-@app.route('/api/v2/confirm', methods=['GET'])
-def confirm():
-    try:
-        token = request.args['token']
-        hashed = request.args['hashed']
-        print("hased: ", hashed)
-        email = s.loads(token)  # max_age = 86400 = 1 day
-
-        # marking email confirmed in database, then...
-        conn = connect()
-        query = """UPDATE customers SET email_verified = 1 WHERE customer_email = \'""" + email + """\';"""
-        update = execute(query, 'post', conn)
-        if update.get('code') == 281:
-            # redirect to login page
-            # only for testing on localhost
-            #return redirect('http://localhost:3000/login?email={}&hashed={}'.format(email, hashed))
-            return redirect('https://mealtoyourdoor.netlify.app/?email={}&hashed={}'.format(email, hashed))
-        else:
-            print("Error happened while confirming an email address.")
-            error = "Confirm error."
-            err_code = 401  # Verification code is incorrect
-            return error, err_code
-    except (SignatureExpired, BadTimeSignature) as err:
-        status = 403  # forbidden
-        return str(err), status
-    finally:
-        disconnect(conn)
-
-
-
-
-
-
-
-'''
-class Login (Resource):
-    def post(self):
-        response = {}
-        try:
-            conn = connect()
-            data = request.get_json(force=True)
-            email = data['email']
-            password = data.get('password')
-            refresh_token = data.get('token')
-            query = """
-                    # CUSTOMER QUERY 1: LOGIN
-                    SELECT customer_uid,
-                            customer_last_name,
-                            customer_first_name,
-                            customer_email, 	
-                            password_hashed, 	
-                            email_verified, 	
-                            user_social_media,
-                            user_access_token,
-                            user_refresh_token  
-                    FROM sf.customers c 
-                    -- WHERE customer_email = "1m4kfun@gmail.com";
-                    WHERE customer_email = \'""" + email + """\';
-                    """
-            res = simple_get_execute(query, __class__.__name__, conn)
-            if res[1] == 500:
-                response['message'] = "Internal Server Error."
-                return response, 500
-            elif res[1] == 204:
-                response['message'] = 'Email Not Found'
-                return response, 404
-            else:
-                user_social_media = res[0]['result'][0]['user_social_media']
-                if password is not None and user_social_media is not None:
-                    response['message'] = "Need to login by Social Media"
-                    return response, 401
-                elif (password is None and refresh_token is None) or (password is None and user_social_media is None):
-                    return BadRequest("Bad request.")
-                # compare passwords if user_social_media is false
-                elif user_social_media is None and password is not None:
-                    if res[0]['result'][0]['password_hashed'] != password:
-                        response['message'] = "Wrong password."
-                        return response, 401
-                    if (int(res[0]['result'][0]['email_verified']) == 0) or (res[0]['result'][0]['email_verified'] == "FALSE"):
-                        response['message'] = "Account need to be verified by email."
-                        return response, 401
-                # compare the refresh token because it never expire.
-                elif (user_social_media != 'NULL' and user_social_media is not None):
-                    if (res[0]['result'][0]['user_refresh_token'] != refresh_token):
-                        response['message'] = "Cannot Authenticated. Token is invalid."
-                        return response, 401
-                else:
-                    string = " Cannot compare the password or refresh token while log in. "
-                    print("*" * (len(string) + 10))
-                    print(string.center(len(string) + 10, "*"))
-                    print("*" * (len(string) + 10))
-                    response['message'] = 'Internal Server Error.'
-                    return response, 500
-
-                del res[0]['result'][0]['password_hashed']
-                del res[0]['result'][0]['email_verified']
-
-                response['message'] = "Authenticated success."
-                response['result'] = res[0]['result'][0]
-                return response, 200
-        except:
-            raise BadRequest('Request failed, please try again later.')
-        finally:
-            disconnect(conn)
-'''   
-
 
 
 class Login(Resource):
@@ -776,7 +774,7 @@ class Login(Resource):
             data = request.get_json(force=True)
             email = data['email']
             password = data.get('password')
-            refresh_token = data.get('token')
+            social_id = data.get('social_id')
             signup_platform = data.get('signup_platform')
             query = """
                     # CUSTOMER QUERY 1: LOGIN
@@ -788,7 +786,10 @@ class Login(Resource):
                         email_verified,
                         user_social_media,
                         user_access_token,
-                        user_refresh_token
+                        user_refresh_token,
+                        user_access_token,
+                        user_refresh_token,
+                        social_id
                     FROM sf.customers c
                     -- WHERE customer_email = "1m4kfun@gmail.com";
                     WHERE customer_email = \'""" + email + """\';
@@ -818,7 +819,7 @@ class Login(Resource):
                     return response
 
                # nothing to check
-                elif (password is None and refresh_token is None) or (password is None and items['result'][0]['user_social_media'] == 'NULL'):
+                elif (password is None and social_id is None) or (password is None and items['result'][0]['user_social_media'] == 'NULL'):
                     response['message'] = "Enter password else login from social media"
                     response['code'] = 405
                     return response
@@ -837,26 +838,25 @@ class Login(Resource):
                         response['code'] = 407
                         return response
 
-                # compare the refresh token because it never expire.
+                # compare the social_id because it never expire.
                 elif (items['result'][0]['user_social_media']) != 'NULL':
-                    '''
-                    keep
+
                     if signup_platform != items['result'][0]['user_social_media']:
                         items['message'] = "Wrong social media used for signup. Use \'" + items['result'][0]['user_social_media'] + "\'."
                         items['result'] = ''
-                        items['code'] = 401
+                        items['code'] = 411
                         return items
-                    '''
-                    if (items['result'][0]['user_refresh_token'] != refresh_token):
-                        print(items['result'][0]['user_refresh_token'])
 
-                        items['message'] = "Cannot Authenticated. Token is invalid"
+                    if (items['result'][0]['social_id'] != social_id):
+                        print(items['result'][0]['social_id'])
+
+                        items['message'] = "Cannot Authenticated. Social_id is invalid"
                         items['result'] = ''
                         items['code'] = 408
                         return items
 
                 else:
-                    string = " Cannot compare the password or refresh token while log in. "
+                    string = " Cannot compare the password or social_id while log in. "
                     print("*" * (len(string) + 10))
                     print(string.center(len(string) + 10, "*"))
                     print("*" * (len(string) + 10))
@@ -879,36 +879,117 @@ class Login(Resource):
 
 
 
+# class Login(Resource):
+#     def post(self):
+#         response = {}
+#         try:
+#             conn = connect()
+#             data = request.get_json(force=True)
+#             email = data['email']
+#             password = data.get('password')
+#             refresh_token = data.get('token')
+#             signup_platform = data.get('signup_platform')
+#             query = """
+#                     # CUSTOMER QUERY 1: LOGIN
+#                     SELECT customer_uid,
+#                         customer_last_name,
+#                         customer_first_name,
+#                         customer_email,
+#                         password_hashed,
+#                         email_verified,
+#                         user_social_media,
+#                         user_access_token,
+#                         user_refresh_token
+#                     FROM sf.customers c
+#                     -- WHERE customer_email = "1m4kfun@gmail.com";
+#                     WHERE customer_email = \'""" + email + """\';
+#                     """
+#             items = execute(query, 'get', conn)
+#             print('Password', password)
+#             print(items)
+
+#             if items['code'] != 280:
+#                 response['message'] = "Internal Server Error."
+#                 response['code'] = 500
+#                 return response
+#             elif not items['result']:
+#                 items['message'] = 'Email Not Found. Please signup'
+#                 items['result'] = ''
+#                 items['code'] = 404
+#                 return items
+#             else:
+#                 print(items['result'])
+#                 print('sc: ', items['result'][0]['user_social_media'])
+
+
+#                 # checks if login was by social media
+#                 if password and items['result'][0]['user_social_media'] != 'NULL' and items['result'][0]['user_social_media'] != None:
+#                     response['message'] = "Need to login by Social Media"
+#                     response['code'] = 401
+#                     return response
+
+#                # nothing to check
+#                 elif (password is None and refresh_token is None) or (password is None and items['result'][0]['user_social_media'] == 'NULL'):
+#                     response['message'] = "Enter password else login from social media"
+#                     response['code'] = 405
+#                     return response
+
+#                 # compare passwords if user_social_media is false
+#                 elif (items['result'][0]['user_social_media'] == 'NULL' or items['result'][0]['user_social_media'] == None) and password is not None:
+
+#                     if items['result'][0]['password_hashed'] != password:
+#                         items['message'] = "Wrong password"
+#                         items['result'] = ''
+#                         items['code'] = 406
+#                         return items
+
+#                     if ((items['result'][0]['email_verified']) == '0') or (items['result'][0]['email_verified'] == "FALSE"):
+#                         response['message'] = "Account need to be verified by email."
+#                         response['code'] = 407
+#                         return response
+
+#                 # compare the refresh token because it never expire.
+#                 elif (items['result'][0]['user_social_media']) != 'NULL':
+#                     '''
+#                     keep
+#                     if signup_platform != items['result'][0]['user_social_media']:
+#                         items['message'] = "Wrong social media used for signup. Use \'" + items['result'][0]['user_social_media'] + "\'."
+#                         items['result'] = ''
+#                         items['code'] = 401
+#                         return items
+#                     '''
+#                     if (items['result'][0]['user_refresh_token'] != refresh_token):
+#                         print(items['result'][0]['user_refresh_token'])
+
+#                         items['message'] = "Cannot Authenticated. Token is invalid"
+#                         items['result'] = ''
+#                         items['code'] = 408
+#                         return items
+
+#                 else:
+#                     string = " Cannot compare the password or refresh token while log in. "
+#                     print("*" * (len(string) + 10))
+#                     print(string.center(len(string) + 10, "*"))
+#                     print("*" * (len(string) + 10))
+#                     response['message'] = string
+#                     response['code'] = 500
+#                     return response
+#                 del items['result'][0]['password_hashed']
+#                 del items['result'][0]['email_verified']
+
+#                 query = "SELECT * from sf.customers WHERE customer_email = \'" + email + "\';"
+#                 items = execute(query, 'get', conn)
+#                 items['message'] = "Authenticated successfully."
+#                 items['code'] = 200
+#                 return items
+
+#         except:
+#             raise BadRequest('Request failed, please try again later.')
+#         finally:
+#             disconnect(conn)
 
 
 
-
-'''
-class AppleLogin (Resource):
-    def post(self):
-        try:
-            token = request.form.get('id_token')
-            if token:
-                data = jwt.decode(token, verify=False)
-                email = data.get('email')
-                sub = data.get('sub')
-                if email is not None:
-                    return redirect("http://127.0.0.1:3000/?email={}&token={}".format(email, sub))
-                else:
-                    response = {
-                        "message": "Not Found user's email in Apple's Token."
-                    }
-                    return response, 400
-            else:
-                response = {
-                    "message": "Not found token "
-                               ""
-                               "in Apple's Response"
-                }
-                return response, 400
-        except:
-            raise BadRequest("Request failed, please try again later.")
-'''
 
 
 
@@ -920,6 +1001,7 @@ class AppleLogin (Resource):
         try:
             conn = connect()
             token = request.form.get('id_token')
+            access_token = request.form.get('code')
             print(token)
             if token:
                 print('INN')
@@ -939,9 +1021,10 @@ class AppleLogin (Resource):
                         email_verified,
                         user_social_media,
                         user_access_token,
-                        user_refresh_token
+                        user_refresh_token,
+                        social_id
                     FROM sf.customers c
-                    WHERE customer_email = \'""" + email + """\';
+                    WHERE social_id = \'""" + sub + """\';
                     """
                     items = execute(query, 'get', conn)
                     print(items)
@@ -952,8 +1035,11 @@ class AppleLogin (Resource):
 
 
                     # new customer
+
+
                     if not items['result']:
-                        items['message'] = "Email doesn't exists Please go to the signup page"
+                        print('New customer')
+                        items['message'] = "Social_id doesn't exists Please go to the signup page"
                         get_user_id_query = "CALL new_customer_uid();"
                         NewUserIDresponse = execute(get_user_id_query, 'get', conn)
 
@@ -969,81 +1055,70 @@ class AppleLogin (Resource):
                         NewUserID = NewUserIDresponse['result'][0]['new_id']
                         user_social_signup = 'APPLE'
                         print('NewUserID', NewUserID)
-                        #only works for mysql, and only allows for inserting one row at a time
+
+
                         customer_insert_query = """
                                     INSERT INTO sf.customers 
-                                    set
-                                        customer_uid = \'""" + NewUserID + """\',
-                                        customer_created_at = \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
-                                        customer_email = \'""" + email + """\',
-                                        user_social_media = \'""" + user_social_signup + """\',
-                                        user_refresh_token = \'""" + sub + """\'
-                                    ;"""
-
-
-                                    #original code for reference
-                                    #   INSERT INTO sf.customers 
-                                    # (
-                                    #     customer_uid,
-                                    #     customer_created_at,
-                                    #     customer_email,
-                                    #     user_social_media,
-                                    #     user_refresh_token
-                                    # )
-                                    # VALUES
-                                    # (
+                                    (
+                                        customer_uid,
+                                        customer_created_at,
+                                        customer_email,
+                                        user_social_media,
+                                        user_refresh_token,
+                                        user_access_token,
+                                        social_id,
+                                        social_timestamp
+                                    )
+                                    VALUES
+                                    (
                                     
-                                    #     \'""" + NewUserID + """\',
-                                    #     \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
-                                    #     \'""" + email + """\',
-                                    #     \'""" + user_social_signup + """\',
-                                    #     \'""" + sub + """\'
-                                    # );"""
-
+                                        \'""" + NewUserID + """\',
+                                        \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
+                                        \'""" + email + """\',
+                                        \'""" + user_social_signup + """\',
+                                        \'""" + access_token + """\',
+                                        \'""" + access_token + """\',
+                                        \'""" + sub + """\',
+                                        DATE_ADD(now() , INTERVAL 1 DAY)
+                                    );"""
 
                         item = execute(customer_insert_query, 'post', conn)
 
                         print('INSERT')
 
-                        #if sql works, and new user then social sign up
                         if item['code'] != 281:
                             item['message'] = 'Check insert sql query'
                             return item
-                        #applelogin changes
-                        return redirect("https://mealtoyourdoor.netlify.app/social-sign-up?id=" + NewUserID)
-                        #return redirect("http://localhost:3000/social-sign-up?id=" + NewUserID)
+                        print('successful redirect to signup')
+                        return redirect("http://localhost:3000/socialsignup?id=" + NewUserID)
+
 
                     # Existing customer
 
-                    #if we get back a refresh token
-                    if items['result'][0]['user_refresh_token']:
-                        print(items['result'][0]['user_social_media'], items['result'][0]['user_refresh_token'])
+                    print('existing-------')
+                    print(items['result'][0]['user_social_media'])
+                    print(items['result'][0]['social_id'])
 
-                        #if result is not apple
-                        if items['result'][0]['user_social_media'] != "APPLE":
-                            items['message'] = "Wrong social media used for signup. Use \'" + items['result'][0]['user_social_media'] + "\'."
-                            items['code'] = 400
-                            return redirect("https://mealtoyourdoor.netlify.app/")
-                            #return redirect("http://localhost:3000")
-                            #return items
+                    if items['result'][0]['user_social_media'] != "APPLE":
+                        print('1-----')
+                        items['message'] = "Wrong social media used for signup. Use \'" + items['result'][0]['user_social_media'] + "\'."
+                        items['code'] = 400
+                        return redirect("http://localhost:3000/adminlogin?media=" + items['result'][0]['user_social_media'])
 
-                        #if referesh token does not match
-                        elif items['result'][0]['user_refresh_token'] != sub:
-                            items['message'] = "Token mismatch"
-                            items['code'] = 400
-                            return redirect("https://mealtoyourdoor.netlify.app/")
-                            #return redirect("http://localhost:3000")
-                            #return items
+                    elif items['result'][0]['social_id'] != sub:
+                        print('20-----')
+                        items['message'] = "social_id mismatch"
+                        items['code'] = 400
+                        return redirect("http://localhost:3000/adminlogin")
 
-                        #if social media = apple, and token matches, send to meals selected
-                        else:
-                            #applelogin changes
-                            # return redirect("http://localhost:3000/farms?id=" + items['result'][0]['customer_uid'])
-                            return redirect("https://mealtoyourdoor.netlify.app/choose-plan?customer_uid=" + items['result'][0]['customer_uid'])
-                            #return redirect("http://localhost:3000/select-meal?id=" + items['result'][0]['customer_uid'])
+                    else:
+                        print('successful redirect to farms')
+                        return redirect("http://localhost:3000/adminlogin?id=" + items['result'][0]['customer_uid'])
+
+
 
                 else:
-                    items['message'] = "Email not returned by Apple LOGIN"
+                    items['message'] = "Social_id not returned by Apple LOGIN"
                     items['code'] = 400
                     return items
 
@@ -1056,6 +1131,154 @@ class AppleLogin (Resource):
                 return response
         except:
             raise BadRequest("Request failed, please try again later.")
+
+
+
+
+# class AppleLogin (Resource):
+
+#     def post(self):
+#         response = {}
+#         items = {}
+#         try:
+#             conn = connect()
+#             token = request.form.get('id_token')
+#             print(token)
+#             if token:
+#                 print('INN')
+#                 data = jwt.decode(token, verify=False)
+#                 print('data-----', data)
+#                 email = data.get('email')
+
+#                 print(data, email)
+#                 if email is not None:
+#                     sub = data['sub']
+#                     query = """
+#                     SELECT customer_uid,
+#                         customer_last_name,
+#                         customer_first_name,
+#                         customer_email,
+#                         password_hashed,
+#                         email_verified,
+#                         user_social_media,
+#                         user_access_token,
+#                         user_refresh_token
+#                     FROM sf.customers c
+#                     WHERE customer_email = \'""" + email + """\';
+#                     """
+#                     items = execute(query, 'get', conn)
+#                     print(items)
+
+#                     if items['code'] != 280:
+#                         items['message'] = "Internal error"
+#                         return items
+
+
+#                     # new customer
+#                     if not items['result']:
+#                         items['message'] = "Email doesn't exists Please go to the signup page"
+#                         get_user_id_query = "CALL new_customer_uid();"
+#                         NewUserIDresponse = execute(get_user_id_query, 'get', conn)
+
+#                         if NewUserIDresponse['code'] == 490:
+#                             string = " Cannot get new User id. "
+#                             print("*" * (len(string) + 10))
+#                             print(string.center(len(string) + 10, "*"))
+#                             print("*" * (len(string) + 10))
+#                             response['message'] = "Internal Server Error."
+#                             response['code'] = 500
+#                             return response
+
+#                         NewUserID = NewUserIDresponse['result'][0]['new_id']
+#                         user_social_signup = 'APPLE'
+#                         print('NewUserID', NewUserID)
+#                         #only works for mysql, and only allows for inserting one row at a time
+#                         customer_insert_query = """
+#                                     INSERT INTO sf.customers 
+#                                     set
+#                                         customer_uid = \'""" + NewUserID + """\',
+#                                         customer_created_at = \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
+#                                         customer_email = \'""" + email + """\',
+#                                         user_social_media = \'""" + user_social_signup + """\',
+#                                         user_refresh_token = \'""" + sub + """\'
+#                                     ;"""
+
+
+#                                     #original code for reference
+#                                     #   INSERT INTO sf.customers 
+#                                     # (
+#                                     #     customer_uid,
+#                                     #     customer_created_at,
+#                                     #     customer_email,
+#                                     #     user_social_media,
+#                                     #     user_refresh_token
+#                                     # )
+#                                     # VALUES
+#                                     # (
+                                    
+#                                     #     \'""" + NewUserID + """\',
+#                                     #     \'""" + (datetime.now()).strftime("%Y-%m-%d %H:%M:%S") + """\',
+#                                     #     \'""" + email + """\',
+#                                     #     \'""" + user_social_signup + """\',
+#                                     #     \'""" + sub + """\'
+#                                     # );"""
+
+
+#                         item = execute(customer_insert_query, 'post', conn)
+
+#                         print('INSERT')
+
+#                         #if sql works, and new user then social sign up
+#                         if item['code'] != 281:
+#                             item['message'] = 'Check insert sql query'
+#                             return item
+#                         #applelogin changes
+#                         return redirect("https://mealtoyourdoor.netlify.app/social-sign-up?id=" + NewUserID)
+#                         #return redirect("http://localhost:3000/social-sign-up?id=" + NewUserID)
+
+#                     # Existing customer
+
+#                     #if we get back a refresh token
+#                     if items['result'][0]['user_refresh_token']:
+#                         print(items['result'][0]['user_social_media'], items['result'][0]['user_refresh_token'])
+
+#                         #if result is not apple
+#                         if items['result'][0]['user_social_media'] != "APPLE":
+#                             items['message'] = "Wrong social media used for signup. Use \'" + items['result'][0]['user_social_media'] + "\'."
+#                             items['code'] = 400
+#                             return redirect("https://mealtoyourdoor.netlify.app/")
+#                             #return redirect("http://localhost:3000")
+#                             #return items
+
+#                         #if referesh token does not match
+#                         elif items['result'][0]['user_refresh_token'] != sub:
+#                             items['message'] = "Token mismatch"
+#                             items['code'] = 400
+#                             return redirect("https://mealtoyourdoor.netlify.app/")
+#                             #return redirect("http://localhost:3000")
+#                             #return items
+
+#                         #if social media = apple, and token matches, send to meals selected
+#                         else:
+#                             #applelogin changes
+#                             # return redirect("http://localhost:3000/farms?id=" + items['result'][0]['customer_uid'])
+#                             return redirect("https://mealtoyourdoor.netlify.app/choose-plan?customer_uid=" + items['result'][0]['customer_uid'])
+#                             #return redirect("http://localhost:3000/select-meal?id=" + items['result'][0]['customer_uid'])
+
+#                 else:
+#                     items['message'] = "Email not returned by Apple LOGIN"
+#                     items['code'] = 400
+#                     return items
+
+
+#             else:
+#                 response = {
+#                     "message": "Token not found in Apple's Response",
+#                     "code": 400
+#                 }
+#                 return response
+#         except:
+#             raise BadRequest("Request failed, please try again later.")
 
 
 
@@ -2464,13 +2687,16 @@ class Edit_Menu(Resource):
 
                 items['menu_insert'] = execute(""" insert into menu 
                                                     values 
-                                                    (\'""" + str(menu_date) + """\',\'""" + str(menu_category) + """\',
-                                                    \'""" + str(menu_type) + """\',\'""" + str(meal_cat) + """\',
+                                                    (\'""" + str(menu_date) + """\',
+                                                    \'""" + str(menu_category) + """\',
+                                                    \'""" + str(menu_type) + """\',
+                                                    \'""" + str(meal_cat) + """\',
                                                     (select meal_id from meals where meal_name = \'""" + str(meal_name) + """\'),
                                                     \'""" + str(default_meal) + """\');
                                                     """, 'post', conn)
                 i += 1
-
+                print("done")
+                
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
@@ -2533,7 +2759,6 @@ class Edit_Meal(Resource):
                                                 meal_desc = \'""" + str(meal_desc) + """\',
                                                 meal_hint = \'""" + str(meal_hint) + """\',
                                                 meal_photo_URL = \'""" + str(meal_photo_URL) + """\',
-                                                # extra_meal_price = \'""" + str(extra_meal_price) + """\',
                                                 meal_calories = \'""" + str(meal_calories) + """\',
                                                 meal_protein = \'""" + str(meal_protein) + """\',
                                                 meal_carbs = \'""" + str(meal_carbs) + """\',
@@ -2979,7 +3204,6 @@ class UpdateProfile(Resource):
 
 
 
-
 class access_refresh_update(Resource):
 
     def post(self):
@@ -2988,11 +3212,7 @@ class access_refresh_update(Resource):
             conn = connect()
             data = request.get_json(force=True)
             query = """
-                    UPDATE sf.customers SET 
-                    user_access_token = \'""" + data['access_token'] + """\', 
-                    user_refresh_token = \'""" + data['refresh_token'] + """\', 
-                    social_timestamp =  \'""" + data['social_timestamp'] + """\' 
-                    WHERE (customer_uid = \'""" + data['uid'] + """\'); ;
+                    UPDATE sf.customers SET user_access_token = \'""" + data['access_token'] + """\', user_refresh_token = \'""" + data['refresh_token'] + """\', social_timestamp =  \'""" + data['social_timestamp'] + """\' WHERE (customer_uid = \'""" + data['uid'] + """\'); ;
                     """
             print(query)
             items = execute(query, 'post', conn)
@@ -3003,8 +3223,6 @@ class access_refresh_update(Resource):
             else:
                 items['message'] = 'Check sql query'
                 items['code'] = 400
-
-
             return items
 
         except:
@@ -3014,6 +3232,198 @@ class access_refresh_update(Resource):
 
 
 
+# class access_refresh_update(Resource):
+
+#     def post(self):
+
+#         try:
+#             conn = connect()
+#             data = request.get_json(force=True)
+#             query = """
+#                     UPDATE sf.customers SET 
+#                     user_access_token = \'""" + data['access_token'] + """\', 
+#                     user_refresh_token = \'""" + data['refresh_token'] + """\', 
+#                     social_timestamp =  \'""" + data['social_timestamp'] + """\' 
+#                     WHERE (customer_uid = \'""" + data['uid'] + """\'); ;
+#                     """
+#             print(query)
+#             items = execute(query, 'post', conn)
+#             if items['code'] == 281:
+#                 items['message'] = 'Access and refresh token updated successfully'
+#                 print(items['code'])
+#                 items['code'] = 200
+#             else:
+#                 items['message'] = 'Check sql query'
+#                 items['code'] = 400
+
+
+#             return items
+
+#         except:
+#             raise BadRequest('Request failed, please try again later.')
+#         finally:
+#             disconnect(conn)
+
+
+
+
+# class token_fetch_update (Resource):
+
+#     def post(self, action):
+#         items = {}
+#         try:
+#             conn = connect()
+#             data = request.get_json(force=True)
+#             email = data['email']
+#             print(data)
+
+#             if action == 'get':
+#                 query = """
+#                         SELECT *
+#                         FROM sf.customers c
+#                         WHERE customer_email = \'""" + email + """\';
+#                         """
+#                 items = execute(query, 'get', conn)
+
+#                 if items['result']:
+
+#                     items['message'] = 'Tokens recieved successful'
+#                     items['result'] = items['result']
+#                     items['code'] = 200
+#                     return items
+#                 else:
+#                     items['message'] = "Email doesn't exists"
+#                     items['result'] = items['result']
+#                     items['code'] = 404
+#                     return items
+#             elif action == 'update':
+#                 query = """
+#                         UPDATE sf.customers 
+#                         SET  
+#                         user_access_token = \'""" + data['user_access_token'] + """\', 
+#                         user_refresh_token = \'""" + data['user_refresh_token'] + """\',
+#                         mobile_access_token = \'""" + data['mobile_access_token'] + """\', 
+#                         mobile_refresh_token = \'""" + data['mobile_refresh_token'] + """\', 
+#                         social_timestamp = DATE_ADD(social_timestamp , INTERVAL 14 DAY)
+#                         WHERE customer_email = \'""" + email + """\';
+#                         """
+#                 print(query)
+#                 items = execute(query, 'post', conn)
+#                 print(items)
+
+#                 if items['code'] == 281:
+
+#                     items['message'] = 'Tokens and timestamp updated successful'
+#                     items['result'] = items['result']
+#                     items['code'] = 200
+#                     return items
+#                 else:
+#                     items['message'] = "Email doesn't exists"
+#                     items['result'] = items['result']
+#                     items['code'] = 404
+#                     return items
+
+#             else:
+#                 items['code'] = 400
+#                 items['message'] = 'Select proper option'
+
+
+#         except:
+#             raise BadRequest('Request failed, please try again later.')
+#         finally:
+#             disconnect(conn)
+
+
+
+class token_fetch_update (Resource):
+
+    def post(self, action):
+        items = {}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            uid = data['uid']
+            print(data)
+
+            if action == 'get':
+                query = """
+                        SELECT *
+                        FROM sf.customers c
+                        WHERE customer_uid = \'""" + uid + """\';
+                        """
+                items = execute(query, 'get', conn)
+
+                if items['result']:
+
+                    items['message'] = 'Tokens recieved successful'
+                    items['result'] = items['result']
+                    items['code'] = 200
+                    return items
+                else:
+                    items['message'] = "UID doesn't exists"
+                    items['result'] = items['result']
+                    items['code'] = 404
+                    return items
+
+            elif action == 'update_mobile':
+                query = """
+                        UPDATE sf.customers 
+                        SET  
+                        mobile_access_token = \'""" + data['mobile_access_token'] + """\', 
+                        mobile_refresh_token = \'""" + data['mobile_refresh_token'] + """\', 
+                        social_timestamp = DATE_ADD(social_timestamp , INTERVAL 14 DAY)
+                        WHERE customer_uid = \'""" + uid + """\';
+                        """
+                print(query)
+                items = execute(query, 'post', conn)
+                print(items)
+                print('code------', items['code'])
+
+                if items['code'] == 281:
+
+                    items['message'] = 'Tokens and timestamp updated successful'
+                    items['code'] = 200
+                    return items
+                else:
+                    items['message'] = "UID doesn't exists"
+                    items['result'] = items['result']
+                    items['code'] = 404
+                    return items
+
+            elif action == 'update_web':
+                query = """
+                        UPDATE sf.customers 
+                        SET  
+                        user_access_token = \'""" + data['user_access_token'] + """\', 
+                        user_refresh_token = \'""" + data['user_refresh_token'] + """\',
+                        social_timestamp = DATE_ADD(social_timestamp , INTERVAL 14 DAY)
+                        WHERE customer_uid = \'""" + uid + """\';
+                        """
+                print(query)
+                items = execute(query, 'post', conn)
+                print(items)
+                print('code------', items['code'])
+
+                if items['code'] == 281:
+
+                    items['message'] = 'Tokens and timestamp updated successful'
+                    items['code'] = 200
+                    return items
+                else:
+                    items['message'] = "UID doesn't exists"
+                    items['result'] = items['result']
+                    items['code'] = 404
+                    return items
+
+            else:
+                items['code'] = 400
+                items['message'] = 'Select proper option'
+
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
 
 
 
@@ -3153,6 +3563,8 @@ api.add_resource(Meals_Selected_Specific, '/api/v2/meals_selected_specific')
 api.add_resource(UpdateProfile, '/api/v2/UpdateProfile')
 
 api.add_resource(access_refresh_update, '/api/v2/access_refresh_update')
+
+api.add_resource(token_fetch_update, '/api/v2/token_fetch_update/<string:action>')
 
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
