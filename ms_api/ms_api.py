@@ -1529,6 +1529,7 @@ class Next_Addon_Charge(Resource):
 
 
 
+
 class AccountSalt(Resource):
     def post(self):
         response = {}
@@ -1561,7 +1562,7 @@ class AccountSalt(Resource):
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
-            disconnect(conn)
+            disconnect(conn)   
 
 
 
@@ -3467,6 +3468,77 @@ class token_fetch_update (Resource):
 
 
 
+class CustInfo(Resource):
+    def get(self):
+            response = {}
+            item = {}
+            try:
+                conn = connect()
+                print("1")
+                #data = request.get_json(force=True)
+                print("2")
+                #query = "CALL sf.new_profile"
+                #new_profile_query = execute(query, 'get', conn)
+                #new_profile = newPaymentUID_query['result'][0]['new_id']
+
+                # uid= data['uid']
+                # f_name= data['first_name']
+                # l_name= data['last_name']
+                # phone= data['phone']
+                # email= data['email']
+                # address= data['address']
+                # unit= data['unit']
+                # city= data['city']
+                # state= data['state']
+                # zip_code= data['zip']
+                # notification= data['noti']
+
+                query = """ 
+                            select customer_uid, 
+                                    customer_first_name, 
+                                    customer_last_name, 
+                                    customer_phone_num, 
+                                    customer_email, 
+                                    customer_address, 
+                                    customer_city, 
+                                    customer_zip, 
+                                    notification_approval,
+                                    SMS_freq_preference,
+                                    notification_device_id, 
+                                    SMS_last_notification,
+                                    max(purchase_date),
+                                    count(purchase_id) 
+                            from customers
+                            left join lplp 
+                            on customer_uid = pur_customer_uid
+                            group by customer_uid;  
+                            """
+
+                print(query)
+                items = execute(query, 'get', conn)
+                print("3")
+                print(items["code"])
+                if items['code']==280:
+
+                    items['message'] = 'Loaded successful'
+                    items['result'] = items['result']
+                    items['code'] = 200
+                    return items
+                else:
+                    items['message'] = "Customer UID doesn't exists"
+                    items['result'] = items['result']
+                    items['code'] = 404
+                    return items
+
+            except:
+                raise BadRequest('Request failed, please try again later.')
+            finally:
+                disconnect(conn)
+
+
+
+
+
 # Define API routes
 # Customer APIs
 
@@ -3606,6 +3678,7 @@ api.add_resource(access_refresh_update, '/api/v2/access_refresh_update')
 
 api.add_resource(token_fetch_update, '/api/v2/token_fetch_update/<string:action>')
 
+api.add_resource(CustInfo, '/api/v2/CustInfo')
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
