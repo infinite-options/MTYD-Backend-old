@@ -3536,83 +3536,132 @@ class CustInfo(Resource):
 
 
 
+
+
+
+
+
+
 class Meal_Detail(Resource):
-    def get(self):
-        response={}
-        items={}
+
+    def get(self, date):
+        response = {}
+        items = {}
+        print("date: ", date)
         try:
             conn = connect()
-            data = request.get_json(force=True)
             print("1")
-            date = data['date']
             query = """
                     select * 
-                    from meals m
+                    from meals 
                     inner join menu
                         on meal_uid = menu_meal_id
-                    where m.menu_date = SUBSTRING(\'""" + date + """\', 1, 10);
+                    where menu_date = \'""" + date + """\';
                     """
-            print(query)
             items = execute(query, 'get', conn)
-            #print("SUBSTRING("SQL Tutorial", 5, 3")
-            print("2")
-            print(items)
-            if items['code'] == 280:
-                items['message'] = 'Get Meal_detail successfully'
-                print(items)
-                #items['result'] = items['result']
-                #print(items['code'])
-                items['code'] = 200
-                return items
+            print(items["code"])
+            if items['code']==280:
+                response['message'] = 'Meals Loaded successful'
+                response['result'] = items
+                #response['code'] = 200
+                print("2")
+                return response, 200
             else:
-                items['message'] = 'Check sql query'
-                items['code'] = 400
+                items['message'] = "Date doesn't exists"
+                items['result'] = items['result']
+                items['code'] = 404
                 return items
+
         except:
-            print("3")
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+
+
+
+
+
+
+
+
+
+
+# class Meal_Detail(Resource):
+#     def get(self):
+#         response={}
+#         items={}
+#         try:
+#             conn = connect()
+#             data = request.get_json(force=True)
+#             print("1")
+#             date = data['date']
+#             query = """
+#                     select * 
+#                     from meals 
+#                     inner join menu
+#                         on meal_uid = menu_meal_id
+#                     where menu_meal_id = \'""" + date + """\';
+#                     """
+#             print(query)
+#             items = execute(query, 'get', conn)
+#             #print("SUBSTRING("SQL Tutorial", 5, 3")
+#             print("2")
+#             print(items)
+#             if items['code'] == 280:
+#                 items['message'] = 'Get Meal_detail successfully'
+#                 print(items)
+#                 #items['result'] = items['result']
+#                 #print(items['code'])
+#                 items['code'] = 200
+#                 return items
+#             else:
+#                 items['message'] = 'Check sql query'
+#                 items['code'] = 400
+#                 return items
+#         except:
+#             print("3")
+#             raise BadRequest('Request failed, please try again later.')
+#         finally:
+#             disconnect(conn)
 
 
 
 
 
 class List_of_Meals(Resource):
-    # HTTP method GET
-    def post(self):
-        items={}
+
+    def get(self, date):
+        response = {}
+        items = {}
+        print("date: ", date)
         try:
             conn = connect()
-            data = request.get_json(force=True)
-            date = data['date']
             print("1")
             query = """
                     select meal_name
-                    from menu m
+                    from menu 
                     inner join meals
                         on meal_uid = menu_meal_id
-                    where m.menu_date= \'""" + date + """\';
+                    where menu_date= \'""" + date + """\';
                     """
-            print("2")
-            items = execute(query, 'post', conn)
-            print(items)
-            if items['code']==281:
-                items['message'] = 'Loaded successful'
-                #items['result'] = items['result']
-                print("3")
-                items['code'] = 200
-                return items
+            items = execute(query, 'get', conn)
+            print(items["code"])
+            if items['code']==280:
+                response['message'] = 'Meals Loaded successful'
+                response['result'] = items
+                #response['code'] = 200
+                print("2")
+                return response, 200
             else:
                 items['message'] = "Date doesn't exists"
                 items['result'] = items['result']
                 items['code'] = 404
                 return items
+
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
-  
 
 
 class Create_Group(Resource):
@@ -3721,10 +3770,12 @@ class Send_Notification(Resource):
             disconnect(conn)
 
     def post(self):
-
+        items={}
         try:
             conn = connect()
             data = request.get_json(force=True)
+            #message = data["message"]
+
             query = """
                     update customers
                     set SMS_last_notification = \'""" + data["message"] + """\'
@@ -3913,9 +3964,9 @@ api.add_resource(token_fetch_update, '/api/v2/token_fetch_update/<string:action>
 
 api.add_resource(CustInfo, '/api/v2/CustInfo')
 
-api.add_resource(Meal_Detail, '/api/v2/Meal_Detail')
+api.add_resource(Meal_Detail, '/api/v2/Meal_Detail/<string:date>')
 
-api.add_resource(List_of_Meals, '/api/v2/List_of_Meals')
+api.add_resource(List_of_Meals, '/api/v2/List_of_Meals/<string:date>')
 
 api.add_resource(Create_Group, '/api/v2/Create_Group')
 
