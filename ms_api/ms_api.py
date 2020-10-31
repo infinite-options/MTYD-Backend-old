@@ -3823,6 +3823,80 @@ class Send_Twilio_SMS(Resource):
         return items
 
 
+
+
+class get_recipes(Resource):
+
+    def get(self, meal_id):
+        response = {}
+        items = {}
+        print("meal_id: ", meal_id)
+        try:
+            conn = connect()
+            print("1")
+            query = """
+                    select recipe_ingredient_id, recipe_ingredient_qty, recipe_measure_id
+                    from recipes
+                    where recipe_meal_id=\'""" + meal_id + """\';
+                    """
+            items = execute(query, 'get', conn)
+            print(items["code"])
+            if items['code']==280:
+                response['message'] = 'Recipe Loaded successful'
+                response['result'] = items
+                #response['code'] = 200
+                print("2")
+                return response, 200
+            else:
+                items['message'] = "Date doesn't exists"
+                items['result'] = items['result']
+                items['code'] = 404
+                return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+class update_recipe(Resource):
+
+    def post(self):
+        items={}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            print("1")
+            qty = data["qty"]
+            id = data["id"]
+            measure = data["measure"]
+            meal_id = data["meal_id"]
+            print("2")
+            query = """
+                    update recipes
+                    set recipe_ingredient_id = \'""" + id + """\', 
+                        recipe_ingredient_qty = \'""" + qty + """\', 
+                        recipe_measure_id = \'""" + measure + """\'
+                    where recipe_meal_id = \'""" + meal_id + """\';
+                    """
+            print(query)
+            items = execute(query, 'post', conn)
+            if items['code'] == 281:
+                items['message'] = 'recipe updated successfully'
+                print(items['code'])
+                items['code'] = 200
+                #return items
+            else:
+                items['message'] = 'Check sql query'
+                items['code'] = 400
+            return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
 # Define API routes
 # Customer APIs
 
@@ -3975,6 +4049,10 @@ api.add_resource(Create_Group, '/api/v2/Create_Group')
 api.add_resource(Send_Notification, '/api/v2/Send_Notification')
 
 api.add_resource(Send_Twilio_SMS, '/api/v2/Send_Twilio_SMS')
+
+api.add_resource(get_recipes, '/api/v2/get_recipes/<string:meal_id>')
+
+api.add_resource(update_recipe, '/api/v2/update_recipe')
 
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
