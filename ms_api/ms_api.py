@@ -3519,7 +3519,6 @@ class CustInfo(Resource):
                 print("3")
                 print(items["code"])
                 if items['code']==280:
-
                     items['message'] = 'Loaded successful'
                     items['result'] = items['result']
                     items['code'] = 200
@@ -3537,6 +3536,240 @@ class CustInfo(Resource):
 
 
 
+class Meal_Detail(Resource):
+    def get(self):
+        response={}
+        items={}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            print("1")
+            date = data['date']
+            query = """
+                    select * 
+                    from meals m
+                    inner join menu
+                        on meal_uid = menu_meal_id
+                    where m.menu_date = SUBSTRING(\'""" + date + """\', 1, 10);
+                    """
+            print(query)
+            items = execute(query, 'get', conn)
+            #print("SUBSTRING("SQL Tutorial", 5, 3")
+            print("2")
+            print(items)
+            if items['code'] == 280:
+                items['message'] = 'Get Meal_detail successfully'
+                print(items)
+                #items['result'] = items['result']
+                #print(items['code'])
+                items['code'] = 200
+                return items
+            else:
+                items['message'] = 'Check sql query'
+                items['code'] = 400
+                return items
+        except:
+            print("3")
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
+class List_of_Meals(Resource):
+    # HTTP method GET
+    def post(self):
+        items={}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            date = data['date']
+            print("1")
+            query = """
+                    select meal_name
+                    from menu m
+                    inner join meals
+                        on meal_uid = menu_meal_id
+                    where m.menu_date= \'""" + date + """\';
+                    """
+            print("2")
+            items = execute(query, 'post', conn)
+            print(items)
+            if items['code']==281:
+                items['message'] = 'Loaded successful'
+                #items['result'] = items['result']
+                print("3")
+                items['code'] = 200
+                return items
+            else:
+                items['message'] = "Date doesn't exists"
+                items['result'] = items['result']
+                items['code'] = 404
+                return items
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+  
+
+
+class Create_Group(Resource):
+
+    def post(self):
+        items={}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            print("1")
+            group = data["group"]
+            uid = data["id"]
+            print("2")
+            query = """
+                    update customers
+                    set notification_group = \'""" + group + """\'
+                    where customer_uid = \'""" + uid + """\';
+                    """
+            print(query)
+            items = execute(query, 'post', conn)
+            if items['code'] == 281:
+                items['message'] = 'Group updated successfully'
+                print(items['code'])
+                items['code'] = 200
+                #return items
+            else:
+                items['message'] = 'Check sql query'
+                items['code'] = 400
+            return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+# class Latest_SMS(Resource):
+
+#     def post(self):
+
+#         try:
+#             conn = connect()
+#             data = request.get_json(force=True)
+#             query = """
+#                     update customers
+#                     set SMS_last_notification = \'""" + data["message"] + """\'
+#                     where customer_uid = \'""" + data["id"] + """\';
+#                     """
+#             print(query)
+#             items = execute(query, 'post', conn)
+#             if items['code'] == 281:
+#                 items['message'] = 'Newest message updated successfully'
+#                 print(items['code'])
+#                 items['code'] = 200
+#             else:
+#                 items['message'] = 'Check sql query'
+#                 items['code'] = 400
+#             return items
+
+#         except:
+#             raise BadRequest('Request failed, please try again later.')
+#         finally:
+#             disconnect(conn)
+
+
+
+class Send_Notification(Resource):
+
+    def get(self):
+        items={}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            if data.get('group') is None or data.get('group') == "FALSE" or data.get('group') == False:
+                group_sent = False
+            else:
+                group_sent = True
+
+            if group_sent == True:
+                query = """
+                select * 
+                from customers 
+                where notification_group = \'""" + data["group"] + """\';
+                """
+            else:
+                query = """
+                select * 
+                from customers 
+                where customer_uid = \'""" + data["id"] + """\';
+                """
+            items = execute(query, 'get', conn)
+            if items['code']==280:
+                items['message'] = 'Loaded successful'
+                items['result'] = items['result']
+                items['code'] = 200
+                return items
+            else:
+                items['message'] = "Customer UID doesn't exists"
+                items['result'] = items['result']
+                items['code'] = 404
+                return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+    def post(self):
+
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            query = """
+                    update customers
+                    set SMS_last_notification = \'""" + data["message"] + """\'
+                    where customer_uid = \'""" + data["id"] + """\';
+                    """
+            print(query)
+            items = execute(query, 'post', conn)
+            if items['code'] == 281:
+                items['message'] = 'Newest message updated successfully'
+                print(items['code'])
+                items['code'] = 200
+            else:
+                items['message'] = 'Check sql query'
+                items['code'] = 400
+            return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+class Send_Twilio_SMS(Resource):
+
+    def post(self):
+        items = {}
+        data = request.get_json(force=True)
+        numbers = data['numbers']
+        message = data['message']
+        if not numbers:
+            raise BadRequest('Request failed. Please provide the recipients field.')
+        if not message:
+            raise BadRequest('Request failed. Please provide the message field.')
+        print('IN SMS----')
+        print(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        for destination in numbers.split(','):
+            client.messages.create(
+                body = message,
+                from_= '+19254815757',
+                to = "+1" + destination
+            )
+        items['code'] = 200
+        items['Message'] = 'SMS sent successfully to all recipients'
+        return items
 
 
 # Define API routes
@@ -3679,9 +3912,22 @@ api.add_resource(access_refresh_update, '/api/v2/access_refresh_update')
 api.add_resource(token_fetch_update, '/api/v2/token_fetch_update/<string:action>')
 
 api.add_resource(CustInfo, '/api/v2/CustInfo')
+
+api.add_resource(Meal_Detail, '/api/v2/Meal_Detail')
+
+api.add_resource(List_of_Meals, '/api/v2/List_of_Meals')
+
+api.add_resource(Create_Group, '/api/v2/Create_Group')
+
+#api.add_resource(Latest_SMS, '/api/v2/Latest_SMS')
+
+api.add_resource(Send_Notification, '/api/v2/Send_Notification')
+
+api.add_resource(Send_Twilio_SMS, '/api/v2/Send_Twilio_SMS')
+
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=2000)
-    #app.run(host='0.0.0.0', port=2000)
+    #app.run(host='127.0.0.1', port=2000)
+    app.run(host='0.0.0.0', port=2000)
