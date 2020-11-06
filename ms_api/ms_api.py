@@ -3897,6 +3897,211 @@ class update_recipe(Resource):
             disconnect(conn)
 
 
+
+class get_orders(Resource):
+
+    def get(self):
+        response = {}
+        items = {}
+        #print("meal_id: ", meal_id)
+        try:
+            conn = connect()
+            print("1")
+            query = """
+                    SELECT 
+                        lplpibr_customer_uid,
+                        customer_first_name,
+                        customer_last_name,
+                        customer_phone_num, 
+                        customer_email, 
+                        customer_address, 
+                        customer_city, 
+                        customer_zip,
+                        lplpibr_items,
+                        lplpibr_jt_item_uid,
+                        lplpibr_jt_business_uid,
+                        lplpibr_jt_item_name,
+                        lplpibr_jt_qty,
+                        lplpibr_jt_price
+                    from customers
+                    inner join sf.lplp_items_by_row
+                    on customer_uid = lplpibr_customer_uid;
+                    """
+            items = execute(query, 'get', conn)
+            print(items["code"])
+            if items['code']==280:
+                response['message'] = 'Orders Loaded successful'
+                response['result'] = items
+                #response['code'] = 200
+                print("2")
+                return response, 200
+            else:
+                items['message'] = "Fail to load"
+                items['result'] = items['result']
+                items['code'] = 404
+                return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+class get_supplys_by_date(Resource):
+
+    def get(self):
+        response = {}
+        items = {}
+        #print("meal_id: ", meal_id)
+        try:
+            conn = connect()
+            print("1")
+            query = """
+                    SELECT 
+                        #lplpibr_items,
+                        lplpibr_jt_business_uid,
+                        lplpibr_jt_item_uid,
+                        lplpibr_jt_item_name,
+                        lplpibr_jt_qty,
+                        lplpibr_jt_id,
+                        lplpibr_jt_price,
+                        start_delivery_date,
+                        purchase_date,
+                        customer_uid
+                        #SUM(lplpibr_jt_qty * lplpibr_jt_price) AS total
+                        #count(
+                    from sf.lplp_items_by_row
+                    inner join purchases
+                        on purchase_uid = lplpibr_purchase_uid
+                    inner join customers
+                        on customer_uid = lplpibr_customer_uid
+                    where lplpibr_jt_business_uid is not null
+                    order by lplpibr_jt_business_uid, lplpibr_jt_item_uid;
+                    """
+            items = execute(query, 'get', conn)
+            print(items["code"])
+            if items['code']==280:
+                response['message'] = 'Supply Loaded successful'
+                response['result'] = items
+                #response['code'] = 200
+                print("2")
+                return response, 200
+            else:
+                items['message'] = "Fail to load"
+                items['result'] = items['result']
+                items['code'] = 404
+                return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+class get_item_revenue(Resource):
+
+    def get(self):
+        response = {}
+        items = {}
+        #print("meal_id: ", meal_id)
+        try:
+            conn = connect()
+            print("1")
+            query = """
+                    SELECT 
+                        #lplpibr_items,
+                        lplpibr_jt_business_uid,
+                        lplpibr_jt_item_uid,
+                        lplpibr_jt_item_name,
+                        SUM(lplpibr_jt_qty)
+                        lplpibr_jt_id,
+                        SUM(lplpibr_jt_price),
+                        #start_delivery_date,
+                        #purchase_date,
+                        SUM(lplpibr_jt_qty * lplpibr_jt_price) AS total
+                        #count(
+                    from sf.lplp_items_by_row
+                    inner join purchases
+                        on purchase_uid = lplpibr_purchase_uid
+                    where lplpibr_jt_business_uid is not null
+                    group by lplpibr_jt_business_uid, lplpibr_jt_item_uid
+                    order by lplpibr_jt_business_uid, lplpibr_jt_item_uid;
+                    """
+            items = execute(query, 'get', conn)
+            print(items["code"])
+            if items['code']==280:
+                response['message'] = 'Item Revenue Loaded successful'
+                response['result'] = items
+                #response['code'] = 200
+                print("2")
+                return response, 200
+            else:
+                items['message'] = "Fail to load"
+                items['result'] = items['result']
+                items['code'] = 404
+                return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+class get_total_revenue(Resource):
+
+    def get(self):
+        response = {}
+        items = {}
+        #print("meal_id: ", meal_id)
+        try:
+            conn = connect()
+            print("1")
+            query = """
+                    SELECT 
+                        #lplpibr_items,
+                        lplpibr_jt_business_uid,
+                        lplpibr_jt_item_uid,
+                        lplpibr_jt_item_name,
+                        SUM(lplpibr_jt_qty),
+                        lplpibr_jt_id,
+                        round(SUM(lplpibr_jt_price),2),
+                        #start_delivery_date,
+                        #purchase_date,
+                        round(SUM(lplpibr_jt_qty * lplpibr_jt_price),2) AS total
+                        #count(
+                    from sf.lplp_items_by_row
+                    inner join purchases
+                        on purchase_uid = lplpibr_purchase_uid
+                    where lplpibr_jt_business_uid is not null
+                    group by lplpibr_jt_business_uid
+                    order by lplpibr_jt_business_uid, lplpibr_jt_item_uid;
+                    """
+            items = execute(query, 'get', conn)
+            print(items["code"])
+            if items['code']==280:
+                response['message'] = 'Total Revenue Loaded successful'
+                response['result'] = items
+                #response['code'] = 200
+                print("2")
+                return response, 200
+            else:
+                items['message'] = "Fail to load"
+                items['result'] = items['result']
+                items['code'] = 404
+                return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
 # Define API routes
 # Customer APIs
 
@@ -4053,6 +4258,14 @@ api.add_resource(Send_Twilio_SMS, '/api/v2/Send_Twilio_SMS')
 api.add_resource(get_recipes, '/api/v2/get_recipes/<string:meal_id>')
 
 api.add_resource(update_recipe, '/api/v2/update_recipe')
+
+api.add_resource(get_orders, '/api/v2/get_orders')
+
+api.add_resource(get_supplys_by_date, '/api/v2/get_supplys_by_date')
+
+api.add_resource(get_item_revenue, '/api/v2/get_item_revenue')
+
+api.add_resource(get_total_revenue, '/api/v2/get_total_revenue')
 
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
