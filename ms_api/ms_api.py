@@ -4137,7 +4137,7 @@ class get_total_revenue(Resource):
 
 
 
-class get_recipes(Resource):
+class get_delivery_info(Resource):
 
     def get(self, purchase_id):
         response = {}
@@ -4147,14 +4147,20 @@ class get_recipes(Resource):
             conn = connect()
             print("1")
             query = """
-                    select recipe_ingredient_id, recipe_ingredient_qty, recipe_measure_id
+                    select order_instructions, delivery_instructions, 
+                            delivery_instructions, delivery_first_name,
+                            delivery_last_name, delivery_phone_num,
+                            delivery_email, delivery_address,
+                            delivery_unit, delivery_city,
+                            delivery_state, delivery_zip,
+                            delivery_latitude, delivery_longitude
                     from lplp
-                    where purchase_id=\'""" + purchase_id + """\';
+                    where purchase_uid=\'""" + purchase_id + """\';
                     """
             items = execute(query, 'get', conn)
             print(items["code"])
             if items['code']==280:
-                response['message'] = 'Recipe Loaded successful'
+                response['message'] = 'Info Loaded successful'
                 response['result'] = items
                 #response['code'] = 200
                 print("2")
@@ -4337,6 +4343,7 @@ api.add_resource(get_item_revenue, '/api/v2/get_item_revenue')
 
 api.add_resource(get_total_revenue, '/api/v2/get_total_revenue')
 
+api.add_resource(get_delivery_info, '/api/v2/get_delivery_info/<string:purchase_id>')
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
