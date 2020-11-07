@@ -1387,9 +1387,21 @@ class Meals_Selected(Resource):
                     WHERE pur_customer_uid = '""" + customer_uid + """';
                     """
 
+            
+            items = execute(query, 'get', conn)
+            print(items)
+            if items['code']!=280:
+                items['message'] = "Failed"
+                items['code'] = 404
+                #return items
+            if items['code']== 280:
+                items['message'] = "Meals selected"
+                items['code'] = 200
+                #return items
+            return items
 
 
-            return simple_get_execute(query, __class__.__name__, conn)
+            #return simple_get_execute(query, __class__.__name__, conn)
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
@@ -1412,9 +1424,20 @@ class Meals_Selected_Specific(Resource):
                     and sel_menu_date = '""" + menu_date + """';
                     """
 
+            items = execute(query, 'get', conn)
+            print(items)
+            if items['code']!=280:
+                items['message'] = "Failed"
+                items['code'] = 404
+                #return items
+            if items['code']== 280:
+                items['message'] = "Meals selected"
+                items['code'] = 200
+                #return items
+            return items
 
 
-            return simple_get_execute(query, __class__.__name__, conn)
+            #return simple_get_execute(query, __class__.__name__, conn)
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
@@ -1434,7 +1457,19 @@ class Get_Upcoming_Menu(Resource):
                         ON menu.menu_meal_id = m.meal_uid
                     WHERE menu_date > CURDATE();
                     """
-            return simple_get_execute(query, __class__.__name__, conn)
+
+            items = execute(query, 'get', conn)
+            print(items)
+            if items['code']!=280:
+                items['message'] = "Failed"
+                items['code'] = 404
+                #return items
+            if items['code']== 280:
+                items['message'] = "Menu selected"
+                items['code'] = 200
+                #return items
+            return items
+            #return simple_get_execute(query, __class__.__name__, conn)
         except:
             raise BadRequest('Request failed, please try again later.')
         finally:
@@ -4091,6 +4126,41 @@ class get_total_revenue(Resource):
                 return response, 200
             else:
                 items['message'] = "Fail to load"
+                items['result'] = items['result']
+                items['code'] = 404
+                return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+class get_recipes(Resource):
+
+    def get(self, purchase_id):
+        response = {}
+        items = {}
+        print("purchase_id: ", purchase_id)
+        try:
+            conn = connect()
+            print("1")
+            query = """
+                    select recipe_ingredient_id, recipe_ingredient_qty, recipe_measure_id
+                    from lplp
+                    where purchase_id=\'""" + purchase_id + """\';
+                    """
+            items = execute(query, 'get', conn)
+            print(items["code"])
+            if items['code']==280:
+                response['message'] = 'Recipe Loaded successful'
+                response['result'] = items
+                #response['code'] = 200
+                print("2")
+                return response, 200
+            else:
+                items['message'] = "Date doesn't exists"
                 items['result'] = items['result']
                 items['code'] = 404
                 return items
