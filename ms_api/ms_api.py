@@ -3503,7 +3503,7 @@ class token_fetch_update (Resource):
 
 
 
-class CustInfo(Resource):
+class customer_info(Resource):
     def get(self):
             response = {}
             item = {}
@@ -4317,7 +4317,7 @@ api.add_resource(access_refresh_update, '/api/v2/access_refresh_update')
 
 api.add_resource(token_fetch_update, '/api/v2/token_fetch_update/<string:action>')
 
-api.add_resource(CustInfo, '/api/v2/CustInfo')
+api.add_resource(customer_info, '/api/v2/customer_info')
 
 api.add_resource(Meal_Detail, '/api/v2/Meal_Detail/<string:date>')
 
