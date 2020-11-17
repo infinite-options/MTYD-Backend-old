@@ -1523,7 +1523,7 @@ class Meals_Selected_Specific(Resource):
                         ON lcm.sel_purchase_id = lplp.purchase_id
                     WHERE pur_customer_uid = '""" + customer_uid + """'
                     and purchase_id = '""" + purchase_id + """'
-                    and SUBSTRING(sel_menu_date, 1, 10) = '""" + menu_date + """';
+                    and sel_menu_date= '""" + menu_date + """';
                     """
 
             items = execute(query, 'get', conn)
