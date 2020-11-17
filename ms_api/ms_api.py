@@ -5,7 +5,7 @@ from flask_mail import Mail, Message  # used for email
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
 from flask_cors import CORS
 import jwt
-
+import boto3
 from werkzeug.exceptions import BadRequest, NotFound
 
 from dateutil.relativedelta import *
@@ -27,6 +27,7 @@ import pymysql
 import requests
 import stripe
 import binascii
+s3 = boto3.client('s3')
 stripe_public_key = 'pk_test_6RSoSd9tJgB2fN2hGkEDHCXp00MQdrK3Tw'
 stripe_secret_key = 'sk_test_fe99fW2owhFEGTACgW3qaykd006gHUwj1j'
 stripe.api_key = stripe_secret_key
@@ -53,7 +54,7 @@ app.config['MAIL_USE_SSL'] = True
 # app.config['MAIL_DEBUG'] = True
 # app.config['MAIL_SUPPRESS_SEND'] = False
 # app.config['TESTING'] = False
-
+ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
 mail = Mail(app)
 s = URLSafeTimedSerializer('thisisaverysecretkey')
 # API
@@ -222,13 +223,18 @@ def simple_post_execute(queries, names, conn):
     response['message'] = "Successful."
     return response, 201
 
+def allowed_file(filename):
+    """Checks if the file is allowed to upload"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 def helper_upload_meal_img(file, key):
     bucket = 'mtyd'
+    print("1")
     if file and allowed_file(file.filename):
         filename = 'https://s3-us-west-1.amazonaws.com/' \
-                   + str(bucket) + '/' + str(key)
-
+                    + str(bucket) + '/' + str(key)
+        print("2")
         upload_file = s3.put_object(
                             Bucket=bucket,
                             Body=file,
@@ -238,6 +244,26 @@ def helper_upload_meal_img(file, key):
                         )
         return filename
     return None
+
+
+
+
+# def helper_upload_meal_img(file, key):
+#     bucket = 'servingfresh'
+#     print("1")
+#     #if file and allowed_file(file.filename):
+#     filename = 'https://s3-us-west-1.amazonaws.com/' \
+#                 + str(bucket) + '/' + str(key)
+#     print(filename)
+#     upload_file = s3.put_object(
+#                         Bucket=bucket,
+#                         Body=file,
+#                         Key=key,
+#                         ACL='public-read',
+#                         ContentType='image/jpeg'
+#                     )
+#     return filename
+#     return None
 
 
 
@@ -5434,8 +5460,10 @@ class addItems(Resource):
                 query = ["CALL sf.new_items_uid;"]
                 NewIDresponse = execute(query[0], 'get', conn)
                 NewID = NewIDresponse['result'][0]['new_id']
-                key =  NewID + "_" + item_name
+                key =  "items/" + NewID
                 print(key)
+                print(request.form)
+                print(request.files)
                 item_photo_url = helper_upload_meal_img(item_photo, key)
                 print(item_photo_url)
                 print("NewRefundID = ", NewID)
@@ -5582,9 +5610,7 @@ api.add_resource(Login, '/api/v2/login')
 #  * The "Login" endpoint accepts only POST request with at least 2 parameters   #
 # in its body. The first param is "email" and the second one is either "password"#
 # or "refresh_token". We are gonna re-use the token we got from facebook or      #
-# google for our site and we'll pick the refresh token because it will not       #
-# expire.                                                                        #
-api.add_resource(AppleLogin, '/api/v2/apple_login', '/')
+# google for our site ahttps://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev/api/v2/meals_selected_specific?customer_uid=100-000334&purchase_id=400-000436&menu_date=2020-11-22+00:00:00 ogin, '/api/v2/apple_login', '/')
 api.add_resource(Change_Password, '/api/v2/change_password')
 
 api.add_resource(Reset_Password, '/api/v2/reset_password')
