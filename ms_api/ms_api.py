@@ -4237,12 +4237,12 @@ class get_item_revenue(Resource):
                         lplpibr_jt_business_uid,
                         lplpibr_jt_item_uid,
                         lplpibr_jt_item_name,
-                        SUM(lplpibr_jt_qty)
+                        SUM(lplpibr_jt_qty) as qty, 
                         lplpibr_jt_id,
-                        SUM(lplpibr_jt_price),
+                        round(lplpibr_jt_price,2) as price,
                         #start_delivery_date,
                         #purchase_date,
-                        SUM(lplpibr_jt_qty * lplpibr_jt_price) AS total
+                        SUM(lplpibr_jt_qty)*round(lplpibr_jt_price,2) AS total
                         #count(
                     from sf.lplp_items_by_row
                     inner join purchases
@@ -4283,24 +4283,18 @@ class get_total_revenue(Resource):
             conn = connect()
             print("1")
             query = """
-                    SELECT 
-                        #lplpibr_items,
-                        lplpibr_jt_business_uid,
-                        lplpibr_jt_item_uid,
-                        lplpibr_jt_item_name,
-                        SUM(lplpibr_jt_qty),
-                        lplpibr_jt_id,
-                        round(SUM(lplpibr_jt_price),2),
-                        #start_delivery_date,
-                        #purchase_date,
-                        round(SUM(lplpibr_jt_qty * lplpibr_jt_price),2) AS total
-                        #count(
-                    from sf.lplp_items_by_row
-                    inner join purchases
-                        on purchase_uid = lplpibr_purchase_uid
-                    where lplpibr_jt_business_uid is not null
-                    group by lplpibr_jt_business_uid
-                    order by lplpibr_jt_business_uid, lplpibr_jt_item_uid;
+                    SELECT lplpibr_jt_business_uid, round(SUM(tcalc.sumCol),2) as total
+                    FROM (
+                        SELECT
+                            lplpibr_jt_business_uid, (SUM(lplpibr_jt_qty)*lplpibr_jt_price) AS sumCol
+                        FROM sf.lplp_items_by_row
+                        INNER JOIN
+                            purchases
+                            on purchase_uid = lplpibr_purchase_uid
+                        where lplpibr_jt_business_uid is not null
+                        group by lplpibr_jt_business_uid, lplpibr_jt_item_uid
+                    ) as tcalc
+                    GROUP BY lplpibr_jt_business_uid;
                     """
             items = execute(query, 'get', conn)
             print(items["code"])
