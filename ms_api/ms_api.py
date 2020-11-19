@@ -4762,7 +4762,7 @@ class business_details_update(Resource):
 
 class orders_by_business(Resource): #need to fix
 
-    def get(self):
+    def get(self, id):
 
         try:
             conn = connect()
@@ -5591,6 +5591,37 @@ class addItems(Resource):
 
 
 
+
+
+class pid_history(Resource):
+    # Fetches ALL DETAILS FOR A SPECIFIC USER
+
+    def get(self, pid):
+        response = {}
+        items = {}
+        print("purchase_id: ", pid)
+        try:
+            conn = connect()
+            query = """
+                    SELECT * 
+                    FROM sf.purchases as pur, sf.payments as pay
+                    WHERE pur.purchase_uid = pay.pay_purchase_uid AND pur.purchase_id = \'""" + pid + """\'
+                    ORDER BY pur.purchase_date DESC; 
+                    """
+            items = execute(query, 'get', conn)
+
+            items['message'] = 'History Loaded successful'
+            items['code'] = 200
+            return items
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
 # Define API routes
 # Customer APIs
 
@@ -5799,6 +5830,8 @@ api.add_resource(createAccount, '/api/v2/createAccount')
 api.add_resource(email_verification, '/api/v2/email_verification')
 
 api.add_resource(all_businesses, '/api/v2/all_businesses')
+
+api.add_resource(pid_history, '/api/v2/pid_history/<string:pid>')
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
