@@ -5620,6 +5620,54 @@ class pid_history(Resource):
 
 
 
+class UpdatePassword(Resource):
+    def post(self):
+            response = {}
+            item = {}
+            try:
+                conn = connect()
+                data = request.get_json(force=True)
+
+                #query = "CALL sf.new_profile"
+                #new_profile_query = execute(query, 'get', conn)
+                #new_profile = newPaymentUID_query['result'][0]['new_id']
+                print("1")
+                uid= data['uid']
+                old_password=data['passworld']
+                salt = (datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
+                #print("1.5")
+                new_password = sha512((data['password'] + salt).encode()).hexdigest()
+                print('password------', new_password)
+                algorithm = "SHA512"
+                #new_password = sha512((data['password'] + salt).encode()).hexdigest()
+                customer_insert_query = [""" 
+                                    update sf.customers
+                                    set
+                                    password_hashed = \'""" + new_password + """\'
+                                    WHERE customer_uid =\'""" + uid + """\'
+                                    and password_hashed = \'""" + old_password + """\';  
+                                """]
+                print("2")
+                print(customer_insert_query)
+                item = execute(customer_insert_query[0], 'post', conn)
+                if item['code'] == 281:
+                    item['code'] = 200
+                    item['message'] = 'Password info updated'
+                else:
+                    item['message'] = 'check sql query'
+                    item['code'] = 490
+
+                return item
+
+            except:
+                print("Error happened while inserting in customer table")
+                raise BadRequest('Request failed, please try again later.')
+            finally:
+                disconnect(conn)
+                print('process completed')
+
+
+
 
 
 # Define API routes
@@ -5832,6 +5880,8 @@ api.add_resource(email_verification, '/api/v2/email_verification')
 api.add_resource(all_businesses, '/api/v2/all_businesses')
 
 api.add_resource(pid_history, '/api/v2/pid_history/<string:pid>')
+
+api.add_resource(UpdatePassword, '/api/v2/UpdatePassword')
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
