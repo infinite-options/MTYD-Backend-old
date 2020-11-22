@@ -5882,6 +5882,8 @@ api.add_resource(all_businesses, '/api/v2/all_businesses')
 api.add_resource(pid_history, '/api/v2/pid_history/<string:pid>')
 
 api.add_resource(UpdatePassword, '/api/v2/UpdatePassword')
+
+api.add_resource(AppleLogin, '/api/v2/AppleLogin', '/')
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
