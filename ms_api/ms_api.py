@@ -5919,7 +5919,7 @@ api.add_resource(UpdatePassword, '/api/v2/UpdatePassword')
 
 api.add_resource(AppleLogin, '/api/v2/AppleLogin', '/')
 
-api.add_resource(Get_Upcoming_Menu_Date, '/api/v2/upcoming_menu_date' )
+api.add_resource(Get_Upcoming_Menu_Date, '/api/v2/upcoming_menu_dates' )
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
