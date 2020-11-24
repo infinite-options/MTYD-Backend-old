@@ -2119,7 +2119,7 @@ class Change_Purchase (Resource):
             cc_exp_date = data['cc_exp_date']
             cc_cvv = data['cc_cvv']
             purchase_id = data['purchase_id']
-            new_item_id = data['new_item_id']
+            new_item_id = data['new_item_id'] #need to change
             #print("1")
             #Check user's identity
             cus_query = """
@@ -5670,6 +5670,40 @@ class UpdatePassword(Resource):
 
 
 
+class Get_Upcoming_Menu_Date(Resource):
+    def get(self):
+        try:
+            conn = connect()
+            # menu_date = request.args['menu_date']
+            query = """
+                    # CUSTOMER QUERY 4A: UPCOMING MENUS
+                    SELECT DISTINCT menu_date
+                    FROM sf.menu
+                    WHERE menu_date > CURDATE() AND
+                    menu_date <= ADDDATE(CURDATE(), 43);
+                    """
+
+            items = execute(query, 'get', conn)
+            print(items)
+            if items['code']!=280:
+                items['message'] = "Failed"
+                items['code'] = 404
+                #return items
+            if items['code']== 280:
+                items['message'] = "Menu selected"
+                items['code'] = 200
+                #return items
+            return items
+            #return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
 # Define API routes
 # Customer APIs
 
@@ -5884,6 +5918,8 @@ api.add_resource(pid_history, '/api/v2/pid_history/<string:pid>')
 api.add_resource(UpdatePassword, '/api/v2/UpdatePassword')
 
 api.add_resource(AppleLogin, '/api/v2/AppleLogin', '/')
+
+api.add_resource(Get_Upcoming_Menu_Date, '/api/v2/upcoming_menu_date' )
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
