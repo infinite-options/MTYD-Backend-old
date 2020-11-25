@@ -1919,7 +1919,7 @@ class Checkout(Resource):
                             '''
                             INSERT INTO  sf.purchases
                             SET purchase_uid = \'''' + purchaseId + '''\',
-                                purchase_date = \'''' + getToday() + '''\',
+                                purchase_date = \'''' + getNow() + '''\',
                                 purchase_id = \'''' + purchaseId + '''\',
                                 purchase_status = 'ACTIVE',
                                 pur_customer_uid = \'''' + customer_uid + '''\',
@@ -2023,7 +2023,7 @@ class Meals_Selection (Resource):
 
 class Change_Purchase (Resource):
     def refund_calculator(self, info_res,  conn):
-        print("info_res['num_issues']: ", info_res['num_issues'])
+
         # Getting the original start and end date for requesting purchase
         start_delivery_date = datetime.strptime(info_res['start_delivery_date'], "%Y-%m-%d %H-%M-%S")
         # check for SKIP. Let consider the simple case. The customer can change their purchases if and only if their purchase
@@ -2056,7 +2056,8 @@ class Change_Purchase (Resource):
             print("There is something wrong with the query to get info for the requested purchase.")
             response = {'message': "Internal Server Error."}
             return response, 500
-        customer_paid = float(info_res['amount_paid'])
+        item_price = json.loads(info_res['items'])[0].get('price')
+        customer_paid = float(item_price)
         # get the price of the new item.
         items_query = """
                         SELECT * FROM subscription_items
@@ -2102,7 +2103,7 @@ class Change_Purchase (Resource):
         # retrieve charge info from stripe to determine how much refund amount left on current charge_id
         # if refund amount left on current charge_id < refund amount needed then trace back the latest previous payment
         # to get the next stripe_charge_id
-        if refund_info['stripe_charge_id']:
+        if refund_info.get('stripe_charge_id'):
             stripe_retrieve_info = stripe.Charge.retrieve(refund_info['stripe_charge_id'])
             return "OK"
         else:
@@ -2164,7 +2165,7 @@ class Change_Purchase (Resource):
                 return {"message": "Internal Server Error"}, 500
             # Calculate refund
             refund_info = self.refund_calculator(info_res[0]['result'][0], conn)
-
+            print("refund_info : ", refund_info)
             refund_amount = refund_info['refund_amount']
 
             # price for the new purchase
@@ -2175,19 +2176,20 @@ class Change_Purchase (Resource):
                         WHERE item_uid = '""" + new_item_id + """';
                         """
             item_res = simple_get_execute(item_query, "QUERY PRICE FOR NEW PURCHASE.", conn)
-
             if item_res[1] != 200:
                 return {"message": "Internal Server Error"}, 500
             amount_will_charge = float(item_res[0]['result'][0]['item_price']) - refund_amount
             # Process stripe
+            print("1: ", amount_will_charge)
             if amount_will_charge > 0:
                 #charge with stripe
                 #need code for charging here
                 pass
             elif amount_will_charge < 0:
+                print('refund_info: ', refund_info)
                 # establishing more info for refund_info before we feed it in stripe_refund
-                refund_info['refund_amount'] = 0 - amount_will_charge
-                refund_info['stripe_charge_id'] = info_res[0]['result'][0]['charge_id']
+                # refund_info['refund_amount'] = 0 - amount_will_charge
+                # refund_info['stripe_charge_id'] = info_res[0]['result'][0]['charge_id']
                 self.stripe_refund(refund_info, conn)
                 # refund
             print("amount_will_charge: ", amount_will_charge)
@@ -2238,9 +2240,9 @@ class Change_Purchase (Resource):
                                         amount_due = "''' + str(round(amount_will_charge,2)) + '''",
                                         amount_discount = 0,
                                         amount_paid = "''' + str(round(amount_will_charge,2)) + '''",
-                                        pay_coupon_id = "NULL",
-                                        charge_id = "NULL",
-                                        payment_type = "NULL",
+                                        pay_coupon_id = NULL,
+                                        charge_id = NULL,
+                                        payment_type = NULL,
                                         info_is_Addon = "FALSE",
                                         cc_num = "''' + str(cc_num) + '''", 
                                         cc_exp_date = "''' + str(cc_exp_date) + '''", 
@@ -2250,7 +2252,7 @@ class Change_Purchase (Resource):
                 '''
                 INSERT INTO  sf.purchases
                 SET purchase_uid = "''' + purchase_uid + '''",
-                                        purchase_date = "''' + getToday() + '''",
+                                        purchase_date = "''' + getNow() + '''",
                                         purchase_id = "''' + purchase_id + '''",
                                         purchase_status = 'ACTIVE',
                                         pur_customer_uid = "''' + customer_uid + '''",
@@ -5464,7 +5466,6 @@ class purchase_Data_SF(Resource):
                 cc_zip = data['cc_zip']
                 charge_id = data['charge_id']
                 payment_type = data['payment_type']
-                print(data)
 
                 query_insert = [""" 
                                     INSERT INTO  sf.payments
