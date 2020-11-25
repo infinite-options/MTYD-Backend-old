@@ -2195,8 +2195,7 @@ class Change_Purchase (Resource):
             print("amount_will_charge: ", amount_will_charge)
             #gathering data before writting info to database
             # need to calculate the start_delivery_date
-            start_delivery_date = data['items'][0]['start_delivery_date']
-
+            start_delivery_date = "2020-11-30 00-00-00"
             info_res = info_res[0]['result'][0]
 
             payment_id = info_res.get("payment_id")
@@ -2272,6 +2271,7 @@ class Change_Purchase (Resource):
                                         order_instructions = "''' + order_instructions + '''",
                                         purchase_notes = "''' + purchase_notes + '''";'''
             ]
+
             response = simple_post_execute(queries, ["PAYMENTS", "PURCHASES"], conn)
 
             if response[1] == 201:
@@ -3570,7 +3570,6 @@ class UpdateProfile(Resource):
                                     customer_zip = \'""" + zip_code + """\',
                                     notification_approval = \'""" + notification + """\'
                                     WHERE customer_uid =\'""" + uid + """\';
-                                    
                                 """]
 
 
@@ -5894,9 +5893,8 @@ api.add_resource(Change_Purchase, '/api/v2/change_purchase')
 #
 
 api.add_resource(Refund_Calculator, '/api/v2/refund_calculator')                 #
-# * The "Refund endpoint accepts
-
-
+# * The "Refund endpoint accepts GET request with purchase_uid as required       #
+# parameter.
 #********************************************************************************#
 #*******************************  ADMIN APIs  ***********************************#
 #---------------------------------   Subscriptions   ----------------------------#
