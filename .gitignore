@@ -13,3 +13,6 @@ venv
 .DS_Store
 sample.py
 *.DS_Store
+
+*.zappa_settings.json
+
