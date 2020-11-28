@@ -227,6 +227,9 @@ def allowed_file(filename):
     """Checks if the file is allowed to upload"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def destructure (d, *keys):
+    return [d[k] if k in d else None for k in keys]
+
 
 def helper_upload_meal_img(file, key):
     bucket = 'mtyd'
@@ -2318,6 +2321,49 @@ class Refund_Calculator (Resource):
                 print("calculated error")
                 return {"message": "Internal Server Error"}, 500
             return {'message': "Successful", 'result': [{"refund_amount": refund_info['refund_amount']}]}, 200
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+
+class Update_Delivery_Info (Resource):
+    def post(self):
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            [first_name, last_name, purchase_uid] = destructure(data, "first_name", "last_name", "purchase_uid")
+            [phone, email] = destructure(data, "phone", "email")
+            [address, unit, city, state, zip] = destructure(data, 'address', 'unit', 'city', 'state', 'zip')
+            [cc_num, cc_cvv, cc_zip, cc_exp_date] = [str(value) if value else None for value in destructure(data, "cc_num", "cc_cvv", "cc_zip", "cc_exp_date")]
+            #should re-calculator the longtitude and latitude before update address
+
+            queries = ['''UPDATE sf.purchases 
+                            SET delivery_first_name= "''' + first_name + '''",
+                                delivery_last_name = "''' + last_name + '''",
+                                delivery_phone_num = "''' + phone + '''",
+                                delivery_email = "''' + email + '''", 
+                                delivery_address = "''' + address + '''",
+                                delivery_unit = "''' + unit + '''",
+                                delivery_city = "''' + city + '''",
+                                delivery_state = "''' + state + '''",
+                                delivery_zip = "''' + zip + '''"
+                            WHERE purchase_uid = "''' + purchase_uid + '";'
+                    ,
+                    ''' UPDATE sf.payments
+                            SET cc_num = "''' + cc_num + '''",
+                                cc_cvv = "''' + cc_cvv + '''",
+                                cc_zip = "''' + cc_zip + '''",
+                                cc_exp_date = "''' + cc_exp_date + '''"
+                            WHERE pay_purchase_uid = "''' + purchase_uid + '";'
+
+                    ]
+            res = simple_post_execute(queries, ["UPDATE PURCHASE'S INFO", "UPDATE PAYMENT'S INFO"], conn)
+            if res[1] == 201:
+                return {"message": "Update Successful"}, 200
+            else:
+                print("Something Wrong with the Update queries")
+                return {"message": "Update Failed"}, 500
         except:
             raise BadRequest("Request failed, please try again later.")
         finally:
@@ -5887,14 +5933,17 @@ api.add_resource(Meals_Selection, '/api/v2/meals_selection')
 #  * The "Meals_Selection" accepts POST request with appropriate parameters      #
 #  Please read the documentation for these parameters and its formats.           #
 
-#--------------------------------------------------------------------------------#
-
 api.add_resource(Change_Purchase, '/api/v2/change_purchase')
-#
+# *The "Change_Purchase" accepts POST request with required JSON format. Please  #
+# read the documentation to get the required format for that JSON object.        #
 
 api.add_resource(Refund_Calculator, '/api/v2/refund_calculator')                 #
 # * The "Refund endpoint accepts GET request with purchase_uid as required       #
 # parameter.
+
+api.add_resource(Update_Delivery_Info, '/api/v2/update_delivery_info')
+#--------------------------------------------------------------------------------#
+
 #********************************************************************************#
 #*******************************  ADMIN APIs  ***********************************#
 #---------------------------------   Subscriptions   ----------------------------#
