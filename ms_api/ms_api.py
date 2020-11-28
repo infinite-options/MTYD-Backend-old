@@ -2334,12 +2334,15 @@ class Update_Delivery_Info (Resource):
         try:
             conn = connect()
             data = request.get_json(force=True)
+            #print(data)
             [first_name, last_name, purchase_uid] = destructure(data, "first_name", "last_name", "purchase_uid")
+            #print(first_name)
             [phone, email] = destructure(data, "phone", "email")
             [address, unit, city, state, zip] = destructure(data, 'address', 'unit', 'city', 'state', 'zip')
             [cc_num, cc_cvv, cc_zip, cc_exp_date] = [str(value) if value else None for value in destructure(data, "cc_num", "cc_cvv", "cc_zip", "cc_exp_date")]
+            #print("1")
             #should re-calculator the longtitude and latitude before update address
-
+            
             queries = ['''UPDATE sf.purchases 
                             SET delivery_first_name= "''' + first_name + '''",
                                 delivery_last_name = "''' + last_name + '''",
@@ -2360,6 +2363,7 @@ class Update_Delivery_Info (Resource):
                             WHERE pay_purchase_uid = "''' + purchase_uid + '";'
 
                     ]
+            #print("3")
             res = simple_post_execute(queries, ["UPDATE PURCHASE'S INFO", "UPDATE PAYMENT'S INFO"], conn)
             if res[1] == 201:
                 return {"message": "Update Successful"}, 200
@@ -6157,6 +6161,51 @@ class Get_Upcoming_Menu_Date(Resource):
 
 
 
+
+class Update_Delivery_Info_Address (Resource):
+    def post(self):
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            #print(data)
+            [first_name, last_name, purchase_uid] = destructure(data, "first_name", "last_name", "purchase_uid")
+            #print(first_name)
+            [phone, email] = destructure(data, "phone", "email")
+            [address, unit, city, state, zip] = destructure(data, 'address', 'unit', 'city', 'state', 'zip')
+            #[cc_num, cc_cvv, cc_zip, cc_exp_date] = [str(value) if value else None for value in destructure(data, "cc_num", "cc_cvv", "cc_zip", "cc_exp_date")]
+            #print("1")
+            #should re-calculator the longtitude and latitude before update address
+            
+            queries = ['''UPDATE sf.purchases 
+                            SET delivery_first_name= "''' + first_name + '''",
+                                delivery_last_name = "''' + last_name + '''",
+                                delivery_phone_num = "''' + phone + '''",
+                                delivery_email = "''' + email + '''", 
+                                delivery_address = "''' + address + '''",
+                                delivery_unit = "''' + unit + '''",
+                                delivery_city = "''' + city + '''",
+                                delivery_state = "''' + state + '''",
+                                delivery_zip = "''' + zip + '''"
+                            WHERE purchase_uid = "''' + purchase_uid + '''";'''
+
+                    ]
+            #print("3")
+            res = simple_post_execute(queries, ["UPDATE PURCHASE'S INFO"], conn)
+            if res[1] == 201:
+                return {"message": "Update Successful"}, 200
+            else:
+                print("Something Wrong with the Update queries")
+                return {"message": "Update Failed"}, 500
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+
+
+
+
+
 # Define API routes
 # Customer APIs
 
@@ -6381,6 +6430,8 @@ api.add_resource(AppleLogin, '/api/v2/AppleLogin', '/')
 api.add_resource(Get_Upcoming_Menu_Date, '/api/v2/upcoming_menu_dates' )
 
 api.add_resource(Change_Purchase_ID, '/api/v2/change_purchase_id')
+
+api.add_resource(Update_Delivery_Info_Address, '/api/v2/Update_Delivery_Info_Address')
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
