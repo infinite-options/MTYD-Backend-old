@@ -6124,35 +6124,35 @@ class Change_Purchase_ID (Resource):
 
 
 
-# class Get_Upcoming_Menu_Date(Resource):
-#     def get(self):
-#         try:
-#             conn = connect()
-#             # menu_date = request.args['menu_date']
-#             query = """
-#                     # CUSTOMER QUERY 4A: UPCOMING MENUS
-#                     SELECT DISTINCT menu_date
-#                     FROM sf.menu
-#                     WHERE menu_date > CURDATE() AND
-#                     menu_date <= ADDDATE(CURDATE(), 43);
-#                     """
+class Get_Upcoming_Menu_Date(Resource):
+    def get(self):
+        try:
+            conn = connect()
+            # menu_date = request.args['menu_date']
+            query = """
+                    # CUSTOMER QUERY 4A: UPCOMING MENUS
+                    SELECT DISTINCT menu_date
+                    FROM sf.menu
+                    WHERE menu_date > CURDATE() AND
+                    menu_date <= ADDDATE(CURDATE(), 43);
+                    """
 
-#             items = execute(query, 'get', conn)
-#             print(items)
-#             if items['code']!=280:
-#                 items['message'] = "Failed"
-#                 items['code'] = 404
-#                 #return items
-#             if items['code']== 280:
-#                 items['message'] = "Menu selected"
-#                 items['code'] = 200
-#                 #return items
-#             return items
-#             #return simple_get_execute(query, __class__.__name__, conn)
-#         except:
-#             raise BadRequest('Request failed, please try again later.')
-#         finally:
-#             disconnect(conn)
+            items = execute(query, 'get', conn)
+            print(items)
+            if items['code']!=280:
+                items['message'] = "Failed"
+                items['code'] = 404
+                #return items
+            if items['code']== 280:
+                items['message'] = "Menu selected"
+                items['code'] = 200
+                #return items
+            return items
+            #return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
 
 
 
