@@ -5950,17 +5950,22 @@ class Change_Purchase_ID (Resource):
             # Also, using POST to protect sensitive information.
             data = request.get_json(force=True)
             #customer_email = data['customer_email']
+            print("0")
             password = data.get('password')
             refresh_token = data.get('refresh_token')
+            print("0.5")
             cc_num = str(data['cc_num'])
             cc_exp_date = data['cc_exp_year'] + data['cc_exp_month'] + "01"
+            print("0.7")
             cc_cvv = data['cc_cvv']
             cc_zip = data['cc_zip']
             purchaseID = data['purchase_id']
             new_item_id = data['new_item_id']
             customer_uid = data["customer_id"]
+            print("0.9")
             items = "'[" + ", ".join([str(item).replace("'", "\"") if item else "NULL" for item in data['items']]) + "]'"
-            #print("1")
+            print(items)
+            print("1")
 
             #Check user's identity
             cus_query = """
@@ -5984,6 +5989,7 @@ class Change_Purchase_ID (Resource):
                     return response, 401
             # query info for requesting purchase
             # Get info of requesting purchase_id
+            print("2")
             info_query = """
                         SELECT pur.*, pay.*, sub.*
                         FROM purchases pur, payments pay, subscription_items sub
@@ -5995,12 +6001,15 @@ class Change_Purchase_ID (Resource):
                         """
             info_res = simple_get_execute(info_query, 'GET INFO FOR CHANGING PURCHASE', conn)
             if info_res[1] != 200:
+                print(info_res[1])
                 return {"message": "Internal Server Error"}, 500
             # Calculate refund
+            print("2.5")
+            print(info_res)
             refund_info = self.refund_calculator(info_res[0]['result'][0], conn)
             print("refund_info : ", refund_info)
             refund_amount = refund_info['refund_amount']
-
+            print("3")
             # price for the new purchase
             # this query below for querying the price may be redundant, the front end can send it in data['items']
             # Should we do it here to make sure that the front end did not make any error?
