@@ -2540,7 +2540,7 @@ class Menu (Resource):
             default_meal = data['default_meal']
             delivery_days = "'[" + ", ".join([str(item) for item in data['delivery_days']]) + "]'"
             meal_price = data['meal_price']
-
+            print("1")
             menu_uid = get_new_id("CALL new_menu_uid", "get_new_menu_ID", conn)
             if menu_uid[1] != 200:
                 return menu_uid
@@ -2572,11 +2572,12 @@ class Menu (Resource):
         try:
             conn = connect()
             menu_uid = request.args['menu_uid']
-
+            print("1")
             query = """
                     DELETE FROM menu WHERE menu_uid = '""" + menu_uid + """';
                     """
             response = simple_post_execute([query], [__class__.__name__], conn)
+            print(response)
             if response[1] != 201:
                 return response
             return response[0], 202
@@ -3199,8 +3200,8 @@ class Edit_Menu(Resource):
         try:
             conn = connect()
 
-            items = execute(""" select meal_name from meals;""", 'get', conn)
-            items2 = execute(""" select * from menu;""", 'get', conn)
+            items = execute(""" select meal_name from sf.meals;""", 'get', conn)
+            items2 = execute(""" select * from sf.menu;""", 'get', conn)
 
             response['message'] = 'Request successful.'
             response['result'] = items
@@ -3243,17 +3244,17 @@ class Edit_Menu(Resource):
                 print(meal_name)
                 print(default_meal)
 
-                items['menu_insert'] = execute(""" insert into menu 
-                                                    values 
-                                                    (\'""" + str(menu_date) + """\',
-                                                    \'""" + str(menu_category) + """\',
-                                                    \'""" + str(menu_type) + """\',
-                                                    \'""" + str(meal_cat) + """\',
-                                                    (select meal_id from meals where meal_name = \'""" + str(meal_name) + """\'),
-                                                    \'""" + str(default_meal) + """\');
-                                                    """, 'post', conn)
+                query = """insert into sf.menu 
+                        values 
+                        (\'""" + menu_date + """\',
+                        \'""" + menu_category + """\',
+                        \'""" + menu_type + """\',
+                        \'""" + meal_cat + """\',
+                        (select meal_id from meals where meal_name = \'""" + meal_name + """\'),
+                        \'""" + default_meal + """\');"""
+                items = execute(query,'post',conn)
                 i += 1
-                print("done")
+            print("done")
                 
         except:
             raise BadRequest('Request failed, please try again later.')
@@ -6064,41 +6065,49 @@ class Change_Purchase_ID (Resource):
             # Also, using POST to protect sensitive information.
             data = request.get_json(force=True)
             #customer_email = data['customer_email']
-            print("0")
+            #print("0")
             password = data.get('password')
             refresh_token = data.get('refresh_token')
-            print("0.5")
+            #print("0.5")
             cc_num = str(data['cc_num'])
             cc_exp_date = data['cc_exp_year'] + data['cc_exp_month'] + "01"
-            print("0.7")
+            #print("0.7")
             cc_cvv = data['cc_cvv']
             cc_zip = data['cc_zip']
             purchaseID = data['purchase_id']
             new_item_id = data['new_item_id']
             customer_uid = data["customer_id"]
-            print("0.9")
+            #print("0.9")
             items = "'[" + ", ".join([str(item).replace("'", "\"") if item else "NULL" for item in data['items']]) + "]'"
-            print(items)
+            #print(items)
             print("1")
 
             #Check user's identity
             cus_query = """
                         SELECT password_hashed,
-                                user_refresh_token
+                                mobile_refresh_token
                         FROM customers
                         WHERE customer_uid = '""" + customer_uid + """';
                         """
             cus_res = simple_get_execute(cus_query, "Update_Purchase - Check Login", conn)
+            print("1.5")
+            print(cus_res)
             if cus_res[1] != 200:
+                print("1.6")
                 return cus_res
             if not password and not refresh_token:
+                print("1.7")
                 raise BadRequest("Request failed, please try again later.")
             elif password:
+                print("1.8")
                 if password != cus_res[0]['result'][0]['password_hashed']:
                     response['message'] = 'Wrong password'
                     return response, 401
             elif refresh_token:
-                if refresh_token != cus_res[0]['result']['user_refresh_token']:
+                print("1.9")
+                print(refresh_token)
+                if refresh_token != cus_res[0]['result'][0]['mobile_refresh_token']:
+                    print("1.95")
                     response['message'] = 'Token Invalid'
                     return response, 401
             # query info for requesting purchase
@@ -6114,16 +6123,17 @@ class Change_Purchase_ID (Resource):
                             AND pur.purchase_status='ACTIVE';  
                         """
             info_res = simple_get_execute(info_query, 'GET INFO FOR CHANGING PURCHASE', conn)
+            #print(info_res)
             if info_res[1] != 200:
                 print(info_res[1])
                 return {"message": "Internal Server Error"}, 500
             # Calculate refund
-            print("2.5")
-            print(info_res)
+            #print("2.5")
+            #print(info_res)
             refund_info = self.refund_calculator(info_res[0]['result'][0], conn)
             print("refund_info : ", refund_info)
             refund_amount = refund_info['refund_amount']
-            print("3")
+            #print("3")
             # price for the new purchase
             # this query below for querying the price may be redundant, the front end can send it in data['items']
             # Should we do it here to make sure that the front end did not make any error?
@@ -6559,5 +6569,5 @@ api.add_resource(Update_Delivery_Info_Address, '/api/v2/Update_Delivery_Info_Add
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=2000)
-    #app.run(host='0.0.0.0', port=2000)
+    #app.run(host='127.0.0.1', port=2000)
+    app.run(host='0.0.0.0', port=2000)
