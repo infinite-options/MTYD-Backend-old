@@ -174,6 +174,7 @@ def get_new_purchaseID(conn):
     if newPurchaseQuery['code'] == 280:
         return newPurchaseQuery['result'][0]['new_id']
     return "Could not generate new purchase ID", 500
+
 def get_new_id(query, name, conn):
     response = {}
     new_id = execute(query, 'get', conn)
@@ -2103,19 +2104,79 @@ class Change_Purchase (Resource):
 
     def stripe_refund (self, refund_info, conn):
         refund_amount = refund_info['refund_amount']
+        refund_id = []
         # retrieve charge info from stripe to determine how much refund amount left on current charge_id
         # if refund amount left on current charge_id < refund amount needed then trace back the latest previous payment
-        # to get the next stripe_charge_id
-        if refund_info.get('stripe_charge_id'):
-            stripe_retrieve_info = stripe.Charge.retrieve(refund_info['stripe_charge_id'])
-            return "OK"
+        # to get the next stripe_charge_id.
+        #list all charge ids which are associated with current purchase_id
+        query = '''SELECT charge_id from sf.payments
+	                WHERE pay_purchase_id = (SELECT pay_purchase_id FROM sf.payments 
+	                                        WHERE pay_purchase_uid = "''' + refund_info['purchase_uid'] + '''")
+                    ORDER BY payment_time_stamp DESC;'''
+        res = simple_get_execute(query, "QUERY ALL CHARGE IDS FOR REFUND", conn)
+        # print("res in stripe_refund: ", res)
+        if not res[0]['result']:
+            print("Cannot process refund. No charge id found")
+            return {"message": "Internal Server Error"}, 500
         else:
-            return None
+            charge_ids = [v for item in res[0]['result'] for v in item.values() if v]
+            amount_should_refund = round(refund_amount*100,0)
+            # print("before while loop. Charge_id: {}, its length: {}".format(charge_ids,len(charge_ids)))
+            while len(charge_ids) > 0 and amount_should_refund > 0:
+                # print("amount should refund: ", amount_should_refund)
+                process_id = charge_ids.pop(0)
+                # print("processing id: ", process_id)
+                # print("charge_ids: {}, its  length: {}".format(charge_ids, len(charge_ids)))
+                #retrieve info from stripe for specific charge_id:
+                refunded_info = stripe.Charge.retrieve(process_id,)
+                # print("refunded_info: ", refunded_info)
+                # print("refunded_info.get('amount'): ", refunded_info.get('amount_refunded'))
+                if refunded_info.get('amount') is not None and refunded_info.get('amount_refunded') is not None:
+                    amount_could_refund = round(float(refunded_info['amount'] - refunded_info['amount_refunded']),0)
+                    # print("amount_could_refund: ", amount_could_refund)
+                    # print("amount_should_refund: ", amount_should_refund)
+                    if amount_should_refund <= amount_could_refund:
+                        # refund it right away => amount should be refund is equal refunded_amount
+                        print("here")
+                        try:
+                            refund_res = stripe.Refund.create(
+                                charge=process_id,
+                                amount=int(amount_should_refund)
+                            )
+                        except stripe.error.CardError as e:
+                            # Since it's a decline, stripe.error.CardError will be caught
+                            response['message'] = e.error.message
+                            return response, 400
+                        # print("refund_res: ", refund_res)
+                        amount_should_refund = 0
+                    else:
+                        # refund it and then calculate how much is left for amount_should_refund
+                        try:
+                            refund_res = stripe.Refund.create(
+                                charge=process_id,
+                                amount=int(amount_could_refund)
+                            )
+                            # print("before substraction")
+                            # print(type(amount_should_refund))
+                            # print(type(amount_could_refund))
+                            amount_should_refund -= int(amount_could_refund)
+                            # print("amount_should_refund after recalculate: ", amount_should_refund)
+                        except stripe.error.CardError as e:
+                            # Since it's a decline, stripe.error.CardError will be caught
+                            response['message'] = e.error.message
+                            return response, 400
+                    refund_id.append(refund_res.get('id'))
+            return refund_id
+
+
 
     def post(self):
         try:
             conn = connect()
             response = {}
+            charge_id = None
+            refunded = False
+            refund_ui = None
             # For this update_purchase endpoint, we should consider to ask customer provide their identity to make sure the right
             # person is doing what he/she want.
             # Also, using POST to protect sensitive information.
@@ -2135,13 +2196,14 @@ class Change_Purchase (Resource):
             #Check user's identity
             cus_query = """
                         SELECT password_hashed,
-                                user_refresh_token
+                                user_refresh_token, customer_phone_num
                         FROM customers
                         WHERE customer_email = '""" + customer_email + """';
                         """
             cus_res = simple_get_execute(cus_query, "Update_Purchase - Check Login", conn)
             if cus_res[1] != 200:
                 return cus_res
+            customer_phone_num = cus_res[0]['result'][0]['customer_phone_num']
             if not password and not refresh_token:
                 raise BadRequest("Request failed, please try again later.")
             elif password:
@@ -2149,7 +2211,7 @@ class Change_Purchase (Resource):
                     response['message'] = 'Wrong password'
                     return response, 401
             elif refresh_token:
-                if refresh_token != cus_res[0]['result']['user_refresh_token']:
+                if refresh_token != cus_res[0]['result'][0]['user_refresh_token']:
                     response['message'] = 'Token Invalid'
                     return response, 401
             # query info for requesting purchase
@@ -2168,7 +2230,6 @@ class Change_Purchase (Resource):
                 return {"message": "Internal Server Error"}, 500
             # Calculate refund
             refund_info = self.refund_calculator(info_res[0]['result'][0], conn)
-            print("refund_info : ", refund_info)
             refund_amount = refund_info['refund_amount']
 
             # price for the new purchase
@@ -2183,22 +2244,51 @@ class Change_Purchase (Resource):
                 return {"message": "Internal Server Error"}, 500
             amount_will_charge = float(item_res[0]['result'][0]['item_price']) - refund_amount
             # Process stripe
-            print("1: ", amount_will_charge)
+
             if amount_will_charge > 0:
                 #charge with stripe
-                #need code for charging here
-                pass
+                #wrap credit_card info
+                query = '''SELECT cc_num, cc_cvv, cc_zip, cc_exp_date 
+                                FROM sf.payments
+                                WHERE pay_purchase_uid = "''' + purchaseID + '";'
+                res = simple_get_execute(query, "GET CREDIT CARD INFO FOR CHANGING MEAL PLAN", conn)
+                if res[1] != 200:
+                    return {"message": "Cannot collect credit card info"}, 500
+
+                [cc_num, cc_cvv, cc_exp_date, cc_zip] = destructure(res[0]['result'][0], "cc_num",  "cc_cvv", "cc_exp_date", "cc_zip")
+
+                month = cc_exp_date.split("-")[1]
+                year  = cc_exp_date.split("-")[0]
+
+                card_dict = {"number": cc_num, "exp_month": int(month), "exp_year": int(year), "cvc": cc_cvv}
+                try:
+                    card_token = stripe.Token.create(card=card_dict)
+                    charge_id = stripe.Charge.create(
+                        amount=int(amount_will_charge * 100),
+                        currency="usd",
+                        source=card_token,
+                        description="Charge for changing Meal Plan",
+                    )
+                except stripe.error.CardError as e:
+                    # Since it's a decline, stripe.error.CardError will be caught
+                    response['message'] = e.error.message
+                    return response, 400
             elif amount_will_charge < 0:
-                print('refund_info: ', refund_info)
                 # establishing more info for refund_info before we feed it in stripe_refund
-                # refund_info['refund_amount'] = 0 - amount_will_charge
-                # refund_info['stripe_charge_id'] = info_res[0]['result'][0]['charge_id']
-                self.stripe_refund(refund_info, conn)
-                # refund
-            print("amount_will_charge: ", amount_will_charge)
+                refund_info['refund_amount'] = abs(amount_will_charge)
+                refund_info['purchase_uid'] = purchaseID
+                refund_info['refunded_id'] = self.stripe_refund(refund_info, conn)
+                if refund_info['refunded_id'] is not None:
+                    refunded = True
+                else:
+                    return {"message": "REFUND PROCESS ERROR."}, 500
+
+
+
             #gathering data before writting info to database
             # need to calculate the start_delivery_date
-            start_delivery_date = "2020-11-30 00-00-00"
+            start_delivery_date = "2020-12-30 00-00-00"
+            charge_id = "'" + charge_id.id + "'" if charge_id else "NULL"
             info_res = info_res[0]['result'][0]
 
             payment_id = info_res.get("payment_id")
@@ -2219,7 +2309,7 @@ class Change_Purchase (Resource):
             order_instructions = info_res.get("order_instructions") if info_res.get("order_instructions") else "NULL"
             purchase_notes = info_res.get("purchase_notes") if info_res.get("purchase_notes") else "NULL"
             # get the new ids
-
+            print("writting into database")
             purchase_uid = get_new_purchaseID(conn)
             if purchase_uid[1] == 500:
                 print(purchaseId[0])
@@ -2243,7 +2333,7 @@ class Change_Purchase (Resource):
                                         amount_discount = 0,
                                         amount_paid = "''' + str(round(amount_will_charge,2)) + '''",
                                         pay_coupon_id = NULL,
-                                        charge_id = NULL,
+                                        charge_id = ''' + charge_id + ''',
                                         payment_type = NULL,
                                         info_is_Addon = "FALSE",
                                         cc_num = "''' + str(cc_num) + '''", 
@@ -2274,14 +2364,37 @@ class Change_Purchase (Resource):
                                         order_instructions = "''' + order_instructions + '''",
                                         purchase_notes = "''' + purchase_notes + '''";'''
             ]
+            if refunded:  # if refunded is true then write it to refund table
+                res_refund_uid = get_new_id("CALL new_refund_uid", "GET NEW REFUND UID", conn)
+                if res_refund_uid[1] != 200:
+                    return {"message": "Error happened when requesting new refund_uid"}, 500
+                refund_uid = res_refund_uid[0]['result']
+                print("refund_uid: ", refund_uid)
 
+                query = '''INSERT INTO sf.refunds
+                                    SET refund_uid = "''' + refund_uid + '''",
+                                        created_at = "''' + getNow() + '''",
+                                        email_id = "''' + customer_email + '''",
+                                        phone_num = "''' + str(customer_phone_num) + '''",
+                                        image_url = "NOT REQUIRED", 
+                                        customer_note = "NOT REQUIRED",
+                                        admin_note = "CHANGED MEAL PLAN",
+                                        refund_amount = "''' + str(abs(amount_will_charge)) + '";'
+                print(query)
+                refund_res = simple_post_execute([query], ["REFUND"], conn)
+                print("refund_res: ", refund_res)
+                if refund_res[1] != 201:
+                    return {"message": "Error happened while writting into refund table"}, 500
             response = simple_post_execute(queries, ["PAYMENTS", "PURCHASES"], conn)
 
             if response[1] == 201:
+                if refunded:
+                    response[0]['refund_uid'] = refund_uid
                 response[0]['payment_id'] = payment_uid
                 response[0]['purchase_id'] = purchase_uid
                 query = '''UPDATE sf.purchases SET purchase_status = "CANCELLED" WHERE purchase_uid = "''' + purchaseID + '";'
                 simple_post_execute([query], ["UPDATE OLD PURCHASES"], conn)
+
                 return response
 
             else:
@@ -2598,6 +2711,7 @@ class Recipes (Resource):
             raise BadRequest("Request failed, please try again later.")
         finally:
             disconnect(conn)
+
 
 class Ingredients (Resource):
     def get(self):
