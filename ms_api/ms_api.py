@@ -6569,5 +6569,5 @@ api.add_resource(Update_Delivery_Info_Address, '/api/v2/Update_Delivery_Info_Add
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
 if __name__ == '__main__':
-    #app.run(host='127.0.0.1', port=2000)
-    app.run(host='0.0.0.0', port=2000)
+    app.run(host='127.0.0.1', port=2000)
+    #app.run(host='0.0.0.0', port=2000)
