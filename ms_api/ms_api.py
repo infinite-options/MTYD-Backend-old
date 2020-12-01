@@ -2088,12 +2088,16 @@ class Change_Purchase (Resource):
                 refund = customer_paid
         elif info_res['num_issues'] == 2:
             print("matching 2 week Pre-pay")
+            print("r0")
             if week_remaining == 0:
                 refund = 0
+                print("r1")
             elif week_remaining == 1:
                 refund = customer_paid - float(price['1'])
+                print("r2")
             elif week_remaining == 2:
                 refund = customer_paid
+                print("r3")
         elif info_res['num_issues'] == 1:
             print("matching weekly")
             if week_remaining == 0:
@@ -2213,7 +2217,7 @@ class Change_Purchase (Resource):
                     response['message'] = 'Wrong password'
                     return response, 401
             elif refresh_token:
-                if refresh_token != cus_res[0]['result'][0]['user_refresh_token']:
+                if refresh_token != cus_res[0]['result'][0]['mobile_refresh_token']:
                     response['message'] = 'Token Invalid'
                     return response, 401
             # query info for requesting purchase
@@ -2231,7 +2235,9 @@ class Change_Purchase (Resource):
             if info_res[1] != 200:
                 return {"message": "Internal Server Error"}, 500
             # Calculate refund
+            print("1")
             refund_info = self.refund_calculator(info_res[0]['result'][0], conn)
+            print("2")
             refund_amount = refund_info['refund_amount']
 
             # price for the new purchase
@@ -5976,7 +5982,8 @@ class Change_Purchase_ID (Resource):
         # check for SKIP. Let consider the simple case. The customer can change their purchases if and only if their purchase
         # still active.
         week_remaining = int(info_res['payment_frequency'])
-
+        print("remaining")
+        print(week_remaining)
         end_delivery_date = start_delivery_date + timedelta(days=(week_remaining) * 7)
         skip_query = """
                     SELECT COUNT(delivery_day) AS skip_count FROM 
@@ -6031,12 +6038,20 @@ class Change_Purchase_ID (Resource):
                 refund = customer_paid
         elif info_res['num_issues'] == 2:
             print("matching 2 week Pre-pay")
+            print("r0")
+            print(week_remaining)
             if week_remaining == 0:
                 refund = 0
+                print("r1")
             elif week_remaining == 1:
-                refund = customer_paid - float(price['1'])
+                print("r2")
+                print(customer_paid)
+                print(price[1])
+                refund = customer_paid - float(price[1])
+                
             elif week_remaining == 2:
                 refund = customer_paid
+                print("r3")
         elif info_res['num_issues'] == 1:
             print("matching weekly")
             if week_remaining == 0:
@@ -6123,13 +6138,13 @@ class Change_Purchase_ID (Resource):
                             AND pur.purchase_status='ACTIVE';  
                         """
             info_res = simple_get_execute(info_query, 'GET INFO FOR CHANGING PURCHASE', conn)
-            #print(info_res)
+            print(info_res[1])
             if info_res[1] != 200:
                 print(info_res[1])
                 return {"message": "Internal Server Error"}, 500
             # Calculate refund
             #print("2.5")
-            #print(info_res)
+            print(info_res[0])
             refund_info = self.refund_calculator(info_res[0]['result'][0], conn)
             print("refund_info : ", refund_info)
             refund_amount = refund_info['refund_amount']
