@@ -1616,10 +1616,11 @@ class Get_Latest_Purchases_Payments(Resource):
             query = """
                     # CUSTOMER QUERY 2: CUSTOMER LATEST PURCHASE AND LATEST PAYMENT HISTORY
                     # NEED CUSTOMER ADDRESS IN CASE CUSTOMER HAS NOT ORDERED BEFORE
-                    SELECT * FROM sf.lplp
+                    SELECT * FROM sf.lplp lp
                     LEFT JOIN sf.customers c
-                        ON lplp.pur_customer_uid = c.customer_uid
-                    WHERE pur_customer_uid = '""" + customer_uid + """';
+                        ON lp.pur_customer_uid = c.customer_uid
+                    WHERE pur_customer_uid = '""" + customer_uid + """'
+                    and items like "%200-000001%";
                     """
             response = simple_get_execute(query, __class__.__name__, conn)
             if response[1] != 200:
