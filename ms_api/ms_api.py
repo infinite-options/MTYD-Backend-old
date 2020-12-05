@@ -1516,12 +1516,13 @@ class Meals_Selected(Resource):
                     SELECT * FROM sf.latest_combined_meal lcm
                     LEFT JOIN sf.lplp
                         ON lcm.sel_purchase_id = lplp.purchase_id
-                    WHERE pur_customer_uid = '""" + customer_uid + """';
+                    WHERE pur_customer_uid = '""" + customer_uid + """'
+                        and items like "%200-000001%"; 
                     """
 
             
             items = execute(query, 'get', conn)
-            print(items)
+            #print(items)
             if items['code']!=280:
                 items['message'] = "Failed"
                 items['code'] = 404
@@ -1553,7 +1554,8 @@ class Meals_Selected_Specific(Resource):
                         ON lcm.sel_purchase_id = lplp.purchase_id
                     WHERE pur_customer_uid = '""" + customer_uid + """'
                     and purchase_id = '""" + purchase_id + """'
-                    and sel_menu_date= '""" + menu_date + """';
+                    and sel_menu_date= '""" + menu_date + """'
+                    and items like "%200-000001%";
                     """
 
             items = execute(query, 'get', conn)
@@ -3742,13 +3744,14 @@ class UpdateProfile(Resource):
                                     customer_city = \'""" + city + """\',
                                     customer_state = \'""" + state + """\',
                                     customer_zip = \'""" + zip_code + """\',
-                                    notification_approval = \'""" + notification + """\'
+                                    cust_notification_approval = \'""" + notification + """\'
                                     WHERE customer_uid =\'""" + uid + """\';
                                 """]
 
 
-                print(customer_insert_query)
+                #print(customer_insert_query)
                 item = execute(customer_insert_query[0], 'post', conn)
+                print(item)
                 if item['code'] == 281:
                     item['code'] = 200
                     item['message'] = 'Profile info updated'
@@ -3992,7 +3995,7 @@ class token_fetch_update (Resource):
 
 
 
-class customer_info(Resource):
+class customer_infos(Resource):
     def get(self):
             response = {}
             item = {}
@@ -4019,22 +4022,23 @@ class customer_info(Resource):
 
                 query = """ 
                             select customer_uid, 
-                                    customer_first_name, 
-                                    customer_last_name, 
-                                    customer_phone_num, 
-                                    customer_email, 
-                                    customer_address, 
-                                    customer_city, 
-                                    customer_zip, 
-                                    notification_approval,
-                                    SMS_freq_preference,
-                                    notification_device_id, 
-                                    SMS_last_notification,
-                                    max(purchase_date),
-                                    count(purchase_id) 
+                                customer_first_name, 
+                                customer_last_name, 
+                                customer_phone_num, 
+                                customer_email, 
+                                customer_address, 
+                                customer_city, 
+                                customer_zip, 
+                                cust_notification_approval,
+                                SMS_freq_preference,
+                                cust_guid_device_id_notification, 
+                                SMS_last_notification,
+                                max(purchase_date),
+                                count(purchase_id) 
                             from customers
-                            left join lplp 
+                            left join lplp lp
                             on customer_uid = pur_customer_uid
+                            where items like "%200-000001%"
                             group by customer_uid;  
                             """
 
@@ -4638,7 +4642,8 @@ class get_delivery_info(Resource):
                             delivery_state, delivery_zip,
                             delivery_latitude, delivery_longitude
                     from lplp
-                    where purchase_uid=\'""" + purchase_id + """\';
+                    where purchase_uid=\'""" + purchase_id + """\'
+                    and items like "%200-000001%";
                     """
             items = execute(query, 'get', conn)
             print(items["code"])
@@ -5279,6 +5284,7 @@ class customer_info(Resource):
                                                 itm_business_uid VARCHAR(255) PATH '$.itm_business_uid')
                                      ) AS deconstruct, sf.payments AS pay, sf.customers AS cust
                     WHERE purchase_uid = pay.pay_purchase_uid AND pur_customer_uid = cust.customer_uid
+                            and items like "%200-000001%"
                     GROUP BY deconstruct.itm_business_uid, pur_customer_uid
                     ; 
                     """
