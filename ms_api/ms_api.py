@@ -47,7 +47,7 @@ app.config['DEBUG'] = True
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 465
 app.config['MAIL_USERNAME'] = 'ptydtesting@gmail.com'
-app.config['MAIL_PASSWORD'] = 'ptydtesting06282020'
+app.config['MAIL_PASSWORD'] = 'PTYDTesting1'
 app.config['MAIL_DEFAULT_SENDER'] = 'ptydtesting@gmail.com'
 app.config['MAIL_USE_TLS'] = False
 app.config['MAIL_USE_SSL'] = True
@@ -2597,6 +2597,27 @@ class Menu (Resource):
 
 
 
+class Delete_Menu_Specific (Resource):
+    def delete(self):
+        try:
+            conn = connect()
+            menu_uid = request.args['menu_uid']
+            meal_uid = data['meal_uid']
+            print("1")
+            query = """
+                    DELETE FROM menu WHERE menu_uid = '""" + menu_uid + """';
+                    """
+            response = simple_post_execute([query], [__class__.__name__], conn)
+            print(response)
+            if response[1] != 201:
+                return response
+            return response[0], 202
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
 
 
 
@@ -2706,6 +2727,8 @@ class Meals (Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+
+
 
 class Recipes (Resource):
     def get(self):
@@ -4423,6 +4446,56 @@ class update_recipe(Resource):
             raise BadRequest('Request failed, please try again later.')
         finally:
             disconnect(conn)
+
+
+
+
+class create_recipe(Resource):
+
+    def post(self):
+        items={}
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            print("1")
+            qty = data["qty"]
+            id = data["id"]
+            measure = data["measure"]
+            meal_id = data["meal_id"]
+            print("2")
+            query = """
+                    INSERT INTO recipes (
+                        recipe_meal_id, 
+                        recipe_ingredient_id, 
+                        recipe_ingredient_qty, 
+                        recipe_measure_id
+                        ) 
+                        VALUES (
+                        \'""" + meal_id + """\',
+                        \'""" + id + """\',
+                        \'""" + qty + """\',
+                        \'""" + measure + """\'
+                        );
+                    """
+            #print(query)
+            items = execute(query, 'post', conn)
+            print(items)
+            if items['code'] == 281:
+                items['message'] = 'recipe updated successfully'
+                print(items['code'])
+                items['code'] = 200
+                #return items
+            else:
+                items['message'] = 'Check sql query'
+                items['code'] = 400
+            return items
+
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
 
 
 #pur_business_uid
@@ -6361,6 +6434,251 @@ class Update_Delivery_Info_Address (Resource):
 
 
 
+class report_order_customer_pivot_detail(Resource):
+
+    def get(self, report, uid):
+
+        try:
+            conn = connect()
+            if report == 'order':
+                query = """
+                        SELECT purchase_uid, purchase_date, delivery_first_name, delivery_last_name, delivery_phone_num, delivery_email, delivery_address, delivery_unit, delivery_city, delivery_state, delivery_zip, deconstruct.*, amount_paid, (SELECT business_name from sf.businesses WHERE business_uid = itm_business_uid) AS business_name
+                        FROM sf.purchases, sf.payments,
+                             JSON_TABLE(items, '$[*]' COLUMNS (
+                                        qty VARCHAR(255)  PATH '$.qty',
+                                        name VARCHAR(255)  PATH '$.name',
+                                        price VARCHAR(255)  PATH '$.price',
+                                        item_uid VARCHAR(255)  PATH '$.item_uid',
+                                        itm_business_uid VARCHAR(255) PATH '$.itm_business_uid')
+                             ) AS deconstruct
+                        WHERE purchase_uid = pay_purchase_uid AND purchase_status = 'ACTIVE' AND itm_business_uid = \'""" + uid + """\';
+                        """
+
+                items = execute(query, 'get', conn)
+
+                if items['code'] != 280:
+                    items['message'] = 'Check sql query'
+                    return items
+                else:
+
+                    items['message'] = 'Report data successful'
+                    items['code'] = 200
+                    result = items['result']
+                    dict = {}
+                    for vals in result:
+                        if vals['purchase_uid'] in dict:
+                            dict[vals['purchase_uid']].append(vals)
+                        else:
+                            dict[vals['purchase_uid']] = [vals]
+
+                    data = []
+
+                    for key, vals in dict.items():
+
+                        tmp = vals[0]
+                        print('tmp----', tmp)
+                        data.append([tmp['purchase_date'],
+                                     tmp['delivery_first_name'],
+                                     tmp['delivery_last_name'],
+                                     tmp['delivery_phone_num'],
+                                     tmp['delivery_email'],
+                                     tmp['delivery_address'],
+                                     tmp['delivery_unit'],
+                                     tmp['delivery_city'],
+                                     tmp['delivery_state'],
+                                     tmp['delivery_zip'],
+                                     tmp['amount_paid']
+                                     ])
+                        for items in vals:
+                            data.append([items['name'],
+                                        items['qty'],
+                                        items['price']
+                                        ])
+
+
+                    si = io.StringIO()
+                    cw = csv.writer(si)
+                    cw.writerow(['Open Orders'])
+                    for item in data:
+                        cw.writerow(item)
+
+                    orders = si.getvalue()
+                    output = make_response(orders)
+                    output.headers["Content-Disposition"] = "attachment; filename=order_details.csv"
+                    output.headers["Content-type"] = "text/csv"
+                    return output
+            elif report == 'customer':
+                query = """
+                        SELECT pur_customer_uid, purchase_uid, purchase_date, delivery_first_name, delivery_last_name, delivery_phone_num, delivery_email, delivery_address, delivery_unit, delivery_city, delivery_state, delivery_zip, deconstruct.*, amount_paid, sum(price) as Amount
+                        FROM sf.purchases, sf.payments,
+                             JSON_TABLE(items, '$[*]' COLUMNS (
+                                        qty VARCHAR(255)  PATH '$.qty',
+                                        name VARCHAR(255)  PATH '$.name',
+                                        price VARCHAR(255)  PATH '$.price',
+                                        item_uid VARCHAR(255)  PATH '$.item_uid',
+                                        itm_business_uid VARCHAR(255) PATH '$.itm_business_uid')
+                             ) AS deconstruct
+                        WHERE purchase_uid = pay_purchase_uid AND purchase_status = 'ACTIVE' AND itm_business_uid = \'""" + uid + """\'
+                        GROUP BY pur_customer_uid;
+                        """
+
+                items = execute(query, 'get', conn)
+
+                if items['code'] != 280:
+                    items['message'] = 'Check sql query'
+                    return items
+                else:
+
+                    items['message'] = 'Report data successful'
+                    items['code'] = 200
+                    result = items['result']
+                    print('result------', result)
+                    data = []
+
+                    for vals in result:
+
+                        tmp = vals
+                        print('tmp----', tmp)
+                        data.append([tmp['delivery_first_name'],
+                                     tmp['delivery_last_name'],
+                                     tmp['delivery_phone_num'],
+                                     tmp['delivery_email'],
+                                     tmp['delivery_address'],
+                                     tmp['delivery_unit'],
+                                     tmp['delivery_city'],
+                                     tmp['delivery_state'],
+                                     tmp['delivery_zip'],
+                                     tmp['Amount']
+                                     ])
+
+
+
+                    si = io.StringIO()
+                    cw = csv.writer(si)
+                    for item in data:
+                        cw.writerow(item)
+
+                    orders = si.getvalue()
+                    output = make_response(orders)
+                    output.headers["Content-Disposition"] = "attachment; filename=customer_details.csv"
+                    output.headers["Content-type"] = "text/csv"
+                    return output
+            elif report == 'pivot':
+                query = """
+                        SELECT pur_customer_uid, purchase_uid, purchase_date, delivery_first_name, delivery_last_name, delivery_phone_num, delivery_email, delivery_address, delivery_unit, delivery_city, delivery_state, delivery_zip, deconstruct.*, amount_paid, (SELECT business_name from sf.businesses WHERE business_uid = itm_business_uid) AS business_name
+                        FROM sf.purchases, sf.payments,
+                             JSON_TABLE(items, '$[*]' COLUMNS (
+                                        qty VARCHAR(255)  PATH '$.qty',
+                                        name VARCHAR(255)  PATH '$.name',
+                                        price VARCHAR(255)  PATH '$.price',
+                                        item_uid VARCHAR(255)  PATH '$.item_uid',
+                                        itm_business_uid VARCHAR(255) PATH '$.itm_business_uid')
+                             ) AS deconstruct
+                        WHERE purchase_uid = pay_purchase_uid AND purchase_status = 'ACTIVE' AND itm_business_uid = \'""" + uid + """\';
+                        """
+
+                items = execute(query, 'get', conn)
+
+                if items['code'] != 280:
+                    items['message'] = 'Check sql query'
+                    return items
+                else:
+
+                    items['message'] = 'Report data successful'
+                    items['code'] = 200
+                    result = items['result']
+                    itm_dict = {}
+                    for vals in result:
+                        if vals['name'] in itm_dict:
+                            itm_dict[vals['name']] += int(vals['qty'])
+                        else:
+                            itm_dict[vals['name']] = int(vals['qty'])
+                    print('ddddddd------', itm_dict)
+                    dict = {}
+                    for vals in result:
+                        if vals['pur_customer_uid'] in dict:
+                            dict[vals['pur_customer_uid']].append(vals)
+                        else:
+                            dict[vals['pur_customer_uid']] = [vals]
+
+                    print('dict----', dict)
+                    si = io.StringIO()
+                    cw = csv.DictWriter(si, ['Name', 'Email', 'Phone', 'Total'] + list(itm_dict.keys()))
+                    cw.writeheader()
+                    glob_tot = 0
+                    for key, vals in dict.items():
+                        print('VALSSS---', vals)
+                        items = {groc['name']:groc['qty'] for groc in vals}
+                        total_sum = 0
+                        for tp_key, tp_vals in items.items():
+                            total_sum += int(tp_vals)
+                        glob_tot += total_sum
+                        print('items-----------------', items)
+                        items['Name'] = vals[0]['delivery_first_name'] + vals[0]['delivery_last_name']
+                        items['Email'] = vals[0]['delivery_email']
+                        items['Phone'] = vals[0]['delivery_phone_num']
+                        items['Total'] = total_sum
+                        cw.writerow(items)
+
+                    cw.writerow({'Name': 'Total', 'Total': glob_tot, **itm_dict})
+
+                    orders = si.getvalue()
+                    output = make_response(orders)
+                    output.headers["Content-Disposition"] = "attachment; filename=pivot_table.csv"
+                    output.headers["Content-type"] = "text/csv"
+                    return output
+            else:
+                return "choose correct option"
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
+class Latest_activity(Resource):
+    def get(self, user_id):
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+
+            items = execute(
+                """ select acc.*,pur.*,mp.meal_plan_desc,
+                        pay.*
+                        from ptyd_accounts acc
+                        left join ptyd_payments pay
+                        on acc.user_uid = pay.buyer_id
+                        left join ptyd_purchases pur
+                        on pay.purchase_id = pur.purchase_id
+                        left join ptyd_meal_plans mp
+                        on pur.meal_plan_id = mp.meal_plan_id
+                        where acc.user_uid = \'""" + user_id + """\'
+                        and pay.payment_time_stamp in
+                        (select latest_time_stamp from
+                            (SELECT buyer_id, purchase_id, MAX(payment_time_stamp) as "latest_time_stamp" FROM
+                                (SELECT * FROM ptyd_payments where buyer_id = \'""" + user_id + """\') temp
+                                group by buyer_id, purchase_id) temp1
+                        )
+                        order by pur.purchase_id
+                        ;
+                        """, 'get', conn)
+
+            response['message'] = 'successful'
+            response['result'] = items
+
+            return response, 200
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
 # Define API routes
 # Customer APIs
 
@@ -6587,6 +6905,12 @@ api.add_resource(Get_Upcoming_Menu_Date, '/api/v2/upcoming_menu_dates' )
 api.add_resource(Change_Purchase_ID, '/api/v2/change_purchase_id')
 
 api.add_resource(Update_Delivery_Info_Address, '/api/v2/Update_Delivery_Info_Address')
+
+api.add_resource(report_order_customer_pivot_detail, '/api/v2/report_order_customer_pivot_detail/<string:report>,<string:uid>')
+
+api.add_resource(create_recipe, '/api/v2/create_recipe')
+
+api.add_resource(Latest_activity, '/api/v2/Latest_activity/<string:user_id>')
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
