@@ -6678,6 +6678,75 @@ class Latest_activity(Resource):
 
 
 
+#allows business to see who ordered what for each item
+class Orders_by_Items(Resource):
+    def get(self):
+        try:
+            conn = connect()
+            # menu_date = request.args['menu_date']
+            query = """
+                    select d_menu_date,
+                            jt_name,
+                            group_concat(lplpibr_customer_uid),
+                            group_concat(jt_qty)
+                    FROM fcs_items_by_row
+                    group by jt_name, d_menu_date;
+                    """
+
+            items = execute(query, 'get', conn)
+            print(items)
+            if items['code']!=280:
+                items['message'] = "Failed"
+                items['code'] = 404
+                #return items
+            if items['code']== 280:
+                items['message'] = "Order data selected"
+                items['code'] = 200
+                #return items
+            return items
+            #return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+class Orders_by_Purchase_Id(Resource):
+    def get(self):
+        try:
+            conn = connect()
+            # menu_date = request.args['menu_date']
+            query = """
+                    SELECT
+                        d_menu_date,
+                        d_purchase_id,
+                        group_concat(jt_name),
+                        group_concat(jt_qty)
+                    FROM fcs_items_by_row
+                    group by d_purchase_id, d_menu_date;
+                    """
+
+            items = execute(query, 'get', conn)
+            print(items)
+            if items['code']!=280:
+                items['message'] = "Failed"
+                items['code'] = 404
+                #return items
+            if items['code']== 280:
+                items['message'] = "Order data selected"
+                items['code'] = 200
+                #return items
+            return items
+            #return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
 
 # Define API routes
 # Customer APIs
@@ -6911,6 +6980,10 @@ api.add_resource(report_order_customer_pivot_detail, '/api/v2/report_order_custo
 api.add_resource(create_recipe, '/api/v2/create_recipe')
 
 api.add_resource(Latest_activity, '/api/v2/Latest_activity/<string:user_id>')
+
+api.add_resource(Orders_by_Items, '/api/v2/Orders_by_Items' )
+
+api.add_resource(Orders_by_Purchase_Id, '/api/v2/Orders_by_Purchase_Id' )
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
