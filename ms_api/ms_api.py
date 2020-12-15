@@ -6747,6 +6747,177 @@ class Orders_by_Purchase_Id(Resource):
 
 
 
+class AppleEmail(Resource):
+    #  RETURNS EMAIL FOR APPLE LOGIN ID
+
+    def post(self):
+
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+            social_id = data.get('social_id')
+
+            query = """
+                    SELECT customer_email
+                    FROM sf.customers c
+                    WHERE social_id = \'""" + social_id + """\'
+                    """
+
+            print(query)
+
+            items = execute(query, 'get', conn)
+            print("Items:", items)
+            print(items['code'])
+            print(items['result'])
+
+            if items['code'] == 280:
+                items['message'] = 'Email Returned'
+                items['result'] = items['result']
+                print(items['code'])
+                items['code'] = 200
+            else:
+                items['message'] = 'Check sql query'
+                items['result'] = items['result']
+                items['code'] = 400
+            return items
+
+        except:
+            raise BadRequest('AppleEmail Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+class Order_by_items_with_Date(Resource):
+    def get(self, date):
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+            query = """
+                    select d_menu_date,
+                            jt_name,
+                            group_concat(lplpibr_customer_uid),
+                            group_concat(jt_qty)
+                    FROM fcs_items_by_row
+                    where d_menu_date = \'""" + date + """\'
+                    group by jt_name, d_menu_date;
+                    """
+
+            items = execute(query, 'get', conn)
+            print(items)
+            if items['code']!=280:
+                items['message'] = "Failed"
+                items['code'] = 404
+                #return items
+            if items['code']== 280:
+                items['message'] = "Order data selected"
+                items['code'] = 200
+                #return items
+            return items
+            #return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
+
+class Orders_by_Purchase_Id_with_Date(Resource):
+    def get(self, date):
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+            query = """
+                    SELECT
+                        d_menu_date,
+                        d_purchase_id,
+                        group_concat(jt_name),
+                        group_concat(jt_qty)
+                    FROM fcs_items_by_row
+                    where d_menu_date = \'""" + date + """\' 
+                    group by d_purchase_id, d_menu_date;
+                    """
+
+            items = execute(query, 'get', conn)
+            print(items)
+            if items['code']!=280:
+                items['message'] = "Failed"
+                items['code'] = 404
+                #return items
+            if items['code']== 280:
+                items['message'] = "Order data selected"
+                items['code'] = 200
+                #return items
+            return items
+            #return simple_get_execute(query, __class__.__name__, conn)
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
+
+
+
+class Stripe_Payment_key_checker(Resource):
+    def post(self):
+        response = {}
+        data = request.get_json(force=True)
+        key_test = "pk_test_6RSoSd9tJgB2fN2hGkEDHCXp00MQdrK3Tw"
+        key_live = "pk_live_g0VCt4AW6k7tyjRw61O3ac5a00Tefdbp8E"
+
+        if data['key'] == key_test:
+            # if app is in testing
+            stripe_status = "Test"
+            # if app is live
+            #stripe_status = "Live"
+            return stripe_status
+
+        elif data['key'] == key_live:
+            # if app is in testing
+            stripe_status = "Test"
+            # if app is live
+            #stripe_status = "Live"
+            return stripe_status
+
+        else:
+            return 200
+        return response
+
+
+class Paypal_Payment_key_checker(Resource):
+    def post(self):
+        response = {}
+        data = request.get_json(force=True)
+        key_test = "ATnaX-KW9jaomOfSgQqmVbQNt2s8IsnhikKOIiMw47YzB--uWlLZgWoPuxoRuHPqhgZFXnmrGCu4jmVr"
+        key_live = "AXhkFKdvsXMoQ5gHgwBM03cKUumitEDI779oyWp5VidFf9jSbW8ls5yZxVxebaA1JVdRhfEzwRYLg3P1"
+
+        if data['key'] == key_test:
+            # if app is in testing
+            paypal_status = 'Test'
+            # if app is live
+            #paypal_status = 'Live'
+            return paypal_status
+
+        elif data['key'] == key_live:
+            # if app is in testing
+            paypal_status = 'Test'
+            # if app is live
+            #paypal_status = 'Live'
+            return paypal_status
+
+        else:
+            return 200
+        return response
+
+
+
 
 # Define API routes
 # Customer APIs
@@ -6984,6 +7155,16 @@ api.add_resource(Latest_activity, '/api/v2/Latest_activity/<string:user_id>')
 api.add_resource(Orders_by_Items, '/api/v2/Orders_by_Items' )
 
 api.add_resource(Orders_by_Purchase_Id, '/api/v2/Orders_by_Purchase_Id' )
+
+api.add_resource(AppleEmail, '/api/v2/AppleEmail', '/')
+
+api.add_resource(Stripe_Payment_key_checker, '/api/v2/Stripe_Payment_key_checker')
+
+api.add_resource(Paypal_Payment_key_checker, '/api/v2/Paypal_Payment_key_checker')
+
+api.add_resource(Order_by_items_with_Date, '/api/v2/Order_by_items_with_Date/<string:date>')
+
+api.add_resource(Orders_by_Purchase_Id_with_Date, '/api/v2/Orders_by_Purchase_Id_with_Date/<string:date>')
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 # lambda function at: https://ht56vci4v9.execute-api.us-west-1.amazonaws.com/dev
