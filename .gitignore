@@ -1,10 +1,10 @@
-*api_key.py
-*env_keys.py
-*.pem
-*bing_api_key.py
+api_key.py
+env_keys.py
+.pem
+bing_api_key.py
 node_modules
-*__pycache__*
-*.log
+__pycache__
+.log
 yarn.lock
 env
 venv
@@ -12,7 +12,6 @@ venv
 .idea
 .DS_Store
 sample.py
-*.DS_Store
 
-*.zappa_settings.json
+zappa_settings.json
 
